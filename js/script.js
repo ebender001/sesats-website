@@ -16,6 +16,7 @@ const authState = {
 
 const pageState = {
   institutionsLoaded: false,
+  institutionsById: new Map(),
 };
 
 function getPlaceholder(placeholderId) {
@@ -301,6 +302,22 @@ function setInstitutionFormNotice(message, type) {
   notice.classList.add(type === "success" ? "success" : "error");
 }
 
+function setEditInstitutionNotice(message, type) {
+  const notice = document.getElementById("edit-institution-notice");
+  if (!notice) return;
+
+  if (!message) {
+    notice.textContent = "";
+    notice.classList.add("hidden");
+    notice.classList.remove("success", "error");
+    return;
+  }
+
+  notice.textContent = message;
+  notice.classList.remove("hidden", "success", "error");
+  notice.classList.add(type === "success" ? "success" : "error");
+}
+
 function resetInstitutionForm() {
   const form = document.getElementById("add-institution-form");
   const activeCheckbox = document.getElementById("institution-active");
@@ -337,14 +354,72 @@ function collectInstitutionFormPayload() {
   };
 }
 
+function collectEditInstitutionPayload() {
+  const objectId = document.getElementById("edit-institution-object-id")?.value || "";
+  const name = document.getElementById("edit-institution-name")?.value.trim() || "";
+  const city = document.getElementById("edit-institution-city")?.value.trim() || "";
+  const stateProvince = document.getElementById("edit-institution-state")?.value.trim() || "";
+  const institutionType = document.getElementById("edit-institution-type")?.value.trim() || "";
+  const contactEmail = document.getElementById("edit-institution-contact-email")?.value.trim() || "";
+  const website = document.getElementById("edit-institution-website")?.value.trim() || "";
+  const isActive = Boolean(document.getElementById("edit-institution-active")?.checked);
+
+  return {
+    objectId,
+    name,
+    city,
+    stateProvince,
+    institutionType,
+    contactEmail,
+    website,
+    isActive,
+  };
+}
+
+function openEditInstitutionOverlay(institution) {
+  const overlay = document.getElementById("edit-institution-overlay");
+  if (!overlay || !institution) return;
+
+  document.getElementById("edit-institution-object-id").value = institution.objectId || "";
+  document.getElementById("edit-institution-name").value = institution.name || "";
+  document.getElementById("edit-institution-city").value = institution.city || "";
+  document.getElementById("edit-institution-state").value = institution.stateProvince || "";
+  document.getElementById("edit-institution-type").value = institution.institutionType || "";
+  document.getElementById("edit-institution-contact-email").value = institution.contactEmail || "";
+  document.getElementById("edit-institution-website").value = institution.website || "";
+  document.getElementById("edit-institution-active").checked = Boolean(institution.isActive);
+  setEditInstitutionNotice("", "success");
+
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+function closeEditInstitutionOverlay() {
+  const overlay = document.getElementById("edit-institution-overlay");
+  const form = document.getElementById("edit-institution-form");
+  if (!overlay) return;
+
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  if (form) {
+    form.reset();
+  }
+  setEditInstitutionNotice("", "success");
+}
+
 function renderInstitutionRows(institutions) {
   const list = document.getElementById("institutions-list");
   if (!list) return;
 
   if (!Array.isArray(institutions) || institutions.length === 0) {
+    pageState.institutionsById = new Map();
     list.innerHTML = '<div class="institution-message">No institutions found.</div>';
     return;
   }
+
+  pageState.institutionsById = new Map(
+    institutions.map((institution) => [institution.objectId, institution])
+  );
 
   list.innerHTML = institutions
     .map((institution) => {
@@ -355,6 +430,7 @@ function renderInstitutionRows(institutions) {
       const isActive = Boolean(institution.isActive);
       const statusLabel = isActive ? "Active" : "Inactive";
       const statusClass = isActive ? "active" : "inactive";
+      const objectId = escapeHtml(institution.objectId || "");
 
       return `
         <div class="institution-row">
@@ -363,6 +439,17 @@ function renderInstitutionRows(institutions) {
           <span class="institution-state">${state}</span>
           <span class="institution-email">${contactEmail}</span>
           <span class="institution-status ${statusClass}">${statusLabel}</span>
+          <span class="institution-actions-cell">
+            <button
+              type="button"
+              class="institution-edit-button"
+              data-institution-id="${objectId}"
+              aria-label="Edit ${name}"
+              title="Edit institution"
+            >
+              ✎
+            </button>
+          </span>
         </div>
       `;
     })
@@ -405,8 +492,38 @@ function toggleExpandableSection(toggleId, contentId, forceOpen = false) {
   return shouldOpen;
 }
 
+function closeExpandableSection(toggleId, contentId) {
+  const toggle = document.getElementById(toggleId);
+  const content = document.getElementById(contentId);
+  if (!toggle || !content) return;
+
+  toggle.setAttribute("aria-expanded", "false");
+  content.classList.remove("is-open");
+}
+
+function collapseInstitutionPanels(except = "") {
+  const sections = [
+    { toggleId: "open-add-institution", contentId: "add-institution-content", key: "add" },
+    { toggleId: "institutions-toggle", contentId: "institutions-content", key: "list" },
+  ];
+
+  sections.forEach((section) => {
+    if (section.key !== except) {
+      closeExpandableSection(section.toggleId, section.contentId);
+    }
+  });
+}
+
 function toggleAddInstitutionCard(forceOpen = false) {
-  return toggleExpandableSection("open-add-institution", "add-institution-content", forceOpen);
+  if (forceOpen) {
+    collapseInstitutionPanels("add");
+  }
+
+  const isOpen = toggleExpandableSection("open-add-institution", "add-institution-content", forceOpen);
+  if (isOpen) {
+    collapseInstitutionPanels("add");
+  }
+  return isOpen;
 }
 
 async function refreshInstitutionsList() {
@@ -425,6 +542,7 @@ function bindInstitutionsSection() {
   setInstitutionsFeedback("", "success");
 
   toggle.addEventListener("click", async () => {
+    collapseInstitutionPanels("list");
     await toggleInstitutionsPanel();
   });
 
@@ -433,6 +551,20 @@ function bindInstitutionsSection() {
       const isOpen = toggleAddInstitutionCard();
       if (isOpen) {
         setInstitutionFormNotice("", "success");
+      }
+    });
+  }
+
+  const list = document.getElementById("institutions-list");
+  if (list) {
+    list.addEventListener("click", (event) => {
+      const editButton = event.target.closest(".institution-edit-button");
+      if (!editButton) return;
+
+      const institutionId = editButton.dataset.institutionId;
+      const institution = pageState.institutionsById.get(institutionId);
+      if (institution) {
+        openEditInstitutionOverlay(institution);
       }
     });
   }
@@ -466,6 +598,51 @@ function bindInstitutionsSection() {
       } catch (error) {
         const message = error?.message || "Unable to add institution right now.";
         setInstitutionFormNotice(message, "error");
+        setInstitutionsFeedback(message, "error");
+      }
+    });
+  }
+
+  const editOverlay = document.getElementById("edit-institution-overlay");
+  const closeEditButton = document.getElementById("close-edit-institution");
+  const cancelEditButton = document.getElementById("cancel-edit-institution");
+  const editForm = document.getElementById("edit-institution-form");
+
+  [closeEditButton, cancelEditButton].forEach((button) => {
+    if (!button) return;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeEditInstitutionOverlay();
+    });
+  });
+
+  if (editOverlay) {
+    editOverlay.addEventListener("click", (event) => {
+      if (event.target === editOverlay) {
+        closeEditInstitutionOverlay();
+      }
+    });
+  }
+
+  if (editForm) {
+    editForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setEditInstitutionNotice("", "success");
+
+      const payload = collectEditInstitutionPayload();
+      if (!payload.objectId || !payload.name) {
+        setEditInstitutionNotice("Institution name is required.", "error");
+        return;
+      }
+
+      try {
+        await window.back4app.runCloudFunction("editInstitution", payload);
+        setInstitutionsFeedback(`Updated ${payload.name}.`, "success");
+        await refreshInstitutionsList();
+        closeEditInstitutionOverlay();
+      } catch (error) {
+        const message = error?.message || "Unable to update institution right now.";
+        setEditInstitutionNotice(message, "error");
         setInstitutionsFeedback(message, "error");
       }
     });
