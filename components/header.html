@@ -1,0 +1,40 @@
+<header class="site-header">
+  <div class="brand">
+    <img class="brand-logo" src="images/HeaderLogo2.png" alt="ABTS logo" />
+    <h1>SESATS Administration</h1>
+  </div>
+
+  <div class="admin-menu user-menu">
+    <button id="user-action-button" class="user-action" type="button" aria-expanded="false">
+      Login
+      <span class="caret">▾</span>
+    </button>
+    <div id="user-dropdown" class="user-dropdown hidden" role="menu">
+      <a href="#" class="user-dropdown-item" id="edit-profile" role="menuitem">Edit Profile</a>
+      <a href="#" class="user-dropdown-item" id="logout" role="menuitem">Log Out</a>
+    </div>
+  </div>
+
+  <div id="login-overlay" class="login-overlay hidden" aria-hidden="true">
+    <div class="login-sheet" role="dialog" aria-modal="true" aria-labelledby="login-title">
+      <button type="button" class="login-close" id="login-cancel" aria-label="Cancel login">×</button>
+      <h2 id="login-title">Sign In</h2>
+      <div id="login-notice" class="login-notice hidden" role="status"></div>
+      <form id="login-form">
+        <label class="login-label" for="login-username">Username or Email
+          <input id="login-username" name="username" type="text" required />
+        </label>
+        <label class="login-label" for="login-password">Password
+          <input id="login-password" name="password" type="password" required />
+        </label>
+        <div class="login-links">
+          <a href="#" id="forgot-password">Forgot password?</a>
+        </div>
+        <div class="login-actions">
+          <button type="button" id="login-cancel-button" class="button button-secondary">Cancel</button>
+          <button type="submit" class="button button-primary">Submit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</header>

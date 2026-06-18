@@ -1,0 +1,88 @@
+<section class="page-title">
+  <h2>Institutions</h2>
+</section>
+
+<section class="institution-panel">
+  <div class="institution-actions">
+    <button
+      type="button"
+      class="institution-toggle institution-add-toggle"
+      id="open-add-institution"
+      aria-expanded="false"
+      aria-controls="add-institution-content"
+    >
+      <span>Add an institution</span>
+      <span class="institution-toggle-caret" aria-hidden="true">▾</span>
+    </button>
+  </div>
+
+  <div id="add-institution-content" class="institution-panel-content">
+    <section class="institution-form-card">
+      <div id="institution-form-notice" class="institution-form-notice hidden" role="status"></div>
+
+      <form id="add-institution-form" class="institution-form">
+        <label class="institution-label" for="institution-name">Name
+          <input id="institution-name" name="name" type="text" required />
+        </label>
+
+        <label class="institution-label" for="institution-city">City
+          <input id="institution-city" name="city" type="text" />
+        </label>
+
+        <label class="institution-label" for="institution-state">State
+          <input id="institution-state" name="stateProvince" type="text" />
+        </label>
+
+        <label class="institution-label" for="institution-type">Institution Type
+          <input id="institution-type" name="institutionType" type="text" />
+        </label>
+
+        <label class="institution-label" for="institution-contact-email">Contact Email
+          <input id="institution-contact-email" name="contactEmail" type="email" />
+        </label>
+
+        <label class="institution-label" for="institution-website">Website
+          <input id="institution-website" name="website" type="url" />
+        </label>
+
+        <label class="institution-checkbox">
+          <input id="institution-active" name="isActive" type="checkbox" checked />
+          <span>Active institution</span>
+        </label>
+
+        <div class="institution-form-actions">
+          <button type="button" id="cancel-add-institution" class="button button-secondary">Clear</button>
+          <button type="submit" class="button button-primary">Add Institution</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div id="institutions-feedback" class="institution-message hidden" role="status"></div>
+
+  <button
+    type="button"
+    class="institution-toggle"
+    id="institutions-toggle"
+    aria-expanded="false"
+    aria-controls="institutions-content"
+  >
+    <span>Current Institutions</span>
+    <span class="institution-toggle-caret" aria-hidden="true">▾</span>
+  </button>
+
+  <div id="institutions-content" class="institution-panel-content">
+    <section class="institution-list-card">
+      <div class="institution-list-header">
+        <span>Name</span>
+        <span>City</span>
+        <span>State</span>
+        <span>Contact Email</span>
+        <span>Status</span>
+      </div>
+      <div id="institutions-list" class="institution-list-body">
+        <div class="institution-message">Loading institutions...</div>
+      </div>
+    </section>
+  </div>
+</section>
