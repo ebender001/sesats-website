@@ -23,6 +23,9 @@ const pageState = {
   institutionsById: new Map(),
   institutionsData: [],
   institutionSortDirection: "asc",
+  activeInstitutions: [],
+  activeSpecialties: [],
+  specialtiesLoaded: false,
 };
 
 function getMainSection(section) {
@@ -338,6 +341,22 @@ function setInstitutionFormNotice(message, type) {
   notice.classList.add(type === "success" ? "success" : "error");
 }
 
+function setInviteUserNotice(message, type) {
+  const notice = document.getElementById("invite-user-feedback");
+  if (!notice) return;
+
+  if (!message) {
+    notice.textContent = "";
+    notice.classList.add("hidden");
+    notice.classList.remove("success", "error");
+    return;
+  }
+
+  notice.textContent = message;
+  notice.classList.remove("hidden", "success", "error");
+  notice.classList.add(type === "success" ? "success" : "error");
+}
+
 function setEditInstitutionNotice(message, type) {
   const notice = document.getElementById("edit-institution-notice");
   if (!notice) return;
@@ -368,6 +387,35 @@ function resetInstitutionForm() {
 function clearInstitutionForm() {
   resetInstitutionForm();
   setInstitutionFormNotice("", "success");
+}
+
+function resetInviteSuccessCard() {
+  const successCard = document.getElementById("invite-user-success-card");
+  if (!successCard) return;
+
+  successCard.classList.add("hidden");
+
+  [
+    "invite-success-display-name",
+    "invite-success-email",
+    "invite-success-role",
+    "invite-success-expiration",
+  ].forEach((id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = "";
+    }
+  });
+}
+
+function resetInviteUserForm() {
+  const form = document.getElementById("invite-user-form");
+  if (form) {
+    form.reset();
+  }
+
+  setInviteUserNotice("", "success");
+  resetInviteSuccessCard();
 }
 
 function collectInstitutionFormPayload() {
@@ -410,6 +458,128 @@ function collectEditInstitutionPayload() {
     website,
     isActive,
   };
+}
+
+function collectInviteUserPayload() {
+  return {
+    displayName: document.getElementById("invite-display-name")?.value.trim() || "",
+    email: document.getElementById("invite-email")?.value.trim() || "",
+    credentials: document.getElementById("invite-credentials")?.value.trim() || "",
+    institutionId: document.getElementById("invite-institution")?.value.trim() || "",
+    primarySpecialtyId:
+      document.getElementById("invite-primary-specialty")?.value.trim() || "",
+    roleName: document.getElementById("invite-role-name")?.value.trim() || "",
+    invitationMessage: document.getElementById("invite-message")?.value.trim() || "",
+    notes: document.getElementById("invite-notes")?.value.trim() || "",
+  };
+}
+
+function setInviteUserSubmitting(isSubmitting) {
+  const submitButton = document.getElementById("invite-user-submit");
+  const resetButton = document.getElementById("invite-user-reset");
+  const loadingMessage = document.getElementById("invite-user-loading");
+  const form = document.getElementById("invite-user-form");
+
+  if (submitButton) {
+    submitButton.disabled = isSubmitting;
+  }
+
+  if (resetButton) {
+    resetButton.disabled = isSubmitting;
+  }
+
+  if (loadingMessage) {
+    loadingMessage.classList.toggle("hidden", !isSubmitting);
+  }
+
+  if (form) {
+    form.setAttribute("aria-busy", String(isSubmitting));
+  }
+}
+
+function validateInviteUserPayload(payload) {
+  if (!payload.displayName) return "Display Name is required.";
+  if (!payload.email) return "Email Address is required.";
+  if (!payload.credentials) return "Credentials is required.";
+  if (!payload.institutionId) return "Institution is required.";
+  if (!payload.primarySpecialtyId) return "Primary Specialty is required.";
+  if (!payload.roleName) return "Role is required.";
+  return "";
+}
+
+function formatInvitationExpiration(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
+function renderInviteSuccess(result) {
+  const successCard = document.getElementById("invite-user-success-card");
+  if (!successCard) return;
+
+  document.getElementById("invite-success-display-name").textContent =
+    result.displayName || "";
+  document.getElementById("invite-success-email").textContent = result.email || "";
+  document.getElementById("invite-success-role").textContent = result.roleName || "";
+  document.getElementById("invite-success-expiration").textContent = formatInvitationExpiration(
+    result.tokenExpiresAt
+  );
+
+  successCard.classList.remove("hidden");
+}
+
+function renderInviteInstitutionOptions(institutions) {
+  const select = document.getElementById("invite-institution");
+  if (!select) return;
+
+  if (!Array.isArray(institutions) || institutions.length === 0) {
+    select.innerHTML = '<option value="">No active institutions available</option>';
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  select.innerHTML = [
+    '<option value=""></option>',
+    ...institutions.map((institution) => {
+      const label = escapeHtml(institution.name || "Unnamed Institution");
+      const objectId = escapeHtml(institution.objectId || "");
+      return `<option value="${objectId}">${label}</option>`;
+    }),
+  ].join("");
+}
+
+function renderInviteSpecialtyOptions(specialties) {
+  const select = document.getElementById("invite-primary-specialty");
+  if (!select) return;
+
+  if (!Array.isArray(specialties) || specialties.length === 0) {
+    select.innerHTML = '<option value="">No active specialties available</option>';
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  select.innerHTML = [
+    '<option value=""></option>',
+    ...specialties.map((specialty) => {
+      const primaryLabel = specialty.shortName
+        ? `${specialty.name} (${specialty.shortName})`
+        : specialty.name || "Unnamed Specialty";
+      return `<option value="${escapeHtml(specialty.objectId || "")}">${escapeHtml(
+        primaryLabel
+      )}</option>`;
+    }),
+  ].join("");
 }
 
 function getSortedInstitutions(institutions) {
@@ -527,10 +697,31 @@ async function fetchInstitutions() {
   try {
     const institutions = await window.back4app.runCloudFunction("listInstitutions");
     renderInstitutionRows(institutions);
+    pageState.activeInstitutions = (Array.isArray(institutions) ? institutions : []).filter(
+      (institution) => institution?.isActive !== false
+    );
     pageState.institutionsLoaded = true;
   } catch (error) {
     console.error("Unable to load institutions.", error);
     list.innerHTML = '<div class="institution-message error">Unable to load institutions right now.</div>';
+  }
+}
+
+async function ensureInviteReferenceData() {
+  if (!pageState.institutionsLoaded) {
+    const institutions = await window.back4app.runCloudFunction("listInstitutions");
+    pageState.activeInstitutions = (Array.isArray(institutions) ? institutions : []).filter(
+      (institution) => institution?.isActive !== false
+    );
+    pageState.institutionsLoaded = true;
+  }
+
+  if (!pageState.specialtiesLoaded) {
+    const specialties = await window.back4app.runCloudFunction("listSpecialties");
+    pageState.activeSpecialties = (Array.isArray(specialties) ? specialties : []).filter(
+      (specialty) => specialty?.isActive !== false
+    );
+    pageState.specialtiesLoaded = true;
   }
 }
 
@@ -655,6 +846,67 @@ function bindInstitutionsListPage() {
   fetchInstitutions();
 }
 
+function bindInviteUserPage() {
+  const form = document.getElementById("invite-user-form");
+  const resetButton = document.getElementById("invite-user-reset");
+
+  setInviteUserNotice("", "success");
+  resetInviteSuccessCard();
+  setInviteUserSubmitting(false);
+
+  if (resetButton) {
+    resetButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      resetInviteUserForm();
+    });
+  }
+
+  ensureInviteReferenceData()
+    .then(() => {
+      renderInviteInstitutionOptions(pageState.activeInstitutions);
+      renderInviteSpecialtyOptions(pageState.activeSpecialties);
+    })
+    .catch((error) => {
+      console.error("Unable to load invitation reference data.", error);
+      renderInviteInstitutionOptions([]);
+      renderInviteSpecialtyOptions([]);
+      setInviteUserNotice(
+        "Unable to load institutions and specialties right now. Please try again.",
+        "error"
+      );
+    });
+
+  if (form) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setInviteUserNotice("", "success");
+      resetInviteSuccessCard();
+
+      const payload = collectInviteUserPayload();
+      const validationMessage = validateInviteUserPayload(payload);
+
+      if (validationMessage) {
+        setInviteUserNotice(validationMessage, "error");
+        return;
+      }
+
+      setInviteUserSubmitting(true);
+
+      try {
+        const result = await window.back4app.runCloudFunction("inviteUser", payload);
+        setInviteUserNotice("Invitation created successfully.", "success");
+        renderInviteSuccess(result || {});
+        form.reset();
+      } catch (error) {
+        const message = error?.message || "Unable to send invitation right now.";
+        setInviteUserNotice(message, "error");
+      } finally {
+        setInviteUserSubmitting(false);
+      }
+    });
+  }
+}
+
 function initializeSection(section) {
   if (section === "institutions-add") {
     bindAddInstitutionPage();
@@ -662,6 +914,10 @@ function initializeSection(section) {
 
   if (section === "institutions-list") {
     bindInstitutionsListPage();
+  }
+
+  if (section === "users-invite") {
+    bindInviteUserPage();
   }
 }
 

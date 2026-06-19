@@ -2,7 +2,117 @@
   <h2>Invite New User</h2>
 </section>
 
-<section class="placeholder-card">
-  <div class="placeholder-icon">✉</div>
-  <p>User invitation form will be added here.</p>
+<section class="invite-user-card">
+  <div id="invite-user-feedback" class="invite-user-notice hidden" role="status" aria-live="polite"></div>
+  <div class="invite-user-intro">
+    <p class="invite-user-eyebrow">ABTS SESATS Administration</p>
+    <h3>Send a pending invitation</h3>
+    <p>
+      Complete the invitee profile below. The invitation will remain pending until the recipient
+      accepts it and creates their own username and password.
+    </p>
+  </div>
+
+  <form id="invite-user-form" class="invite-user-form">
+    <div class="invite-user-grid">
+      <label class="invite-user-label" for="invite-display-name">Display Name
+        <input id="invite-display-name" name="displayName" type="text" required />
+      </label>
+
+      <label class="invite-user-label" for="invite-email">Email Address
+        <input id="invite-email" name="email" type="email" required />
+      </label>
+
+      <label class="invite-user-label" for="invite-credentials">Credentials
+        <select id="invite-credentials" name="credentials" required>
+          <option value=""></option>
+          <option value="MD">MD</option>
+          <option value="DO">DO</option>
+          <option value="PhD">PhD</option>
+          <option value="PA">PA</option>
+          <option value="NP">NP</option>
+          <option value="RN">RN</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+
+      <label class="invite-user-label" for="invite-role-name">Role
+        <select id="invite-role-name" name="roleName" required>
+          <option value=""></option>
+          <option value="super_admin">super_admin</option>
+          <option value="admin">admin</option>
+          <option value="editor">editor</option>
+          <option value="reviewer">reviewer</option>
+          <option value="ai_generator">ai_generator</option>
+          <option value="subscriber">subscriber</option>
+          <option value="institution_admin">institution_admin</option>
+        </select>
+      </label>
+
+      <label class="invite-user-label" for="invite-institution">Institution
+        <select id="invite-institution" name="institutionId" required disabled>
+          <option value="">Loading institutions...</option>
+        </select>
+      </label>
+
+      <label class="invite-user-label" for="invite-primary-specialty">Primary Specialty
+        <select id="invite-primary-specialty" name="primarySpecialtyId" required disabled>
+          <option value="">Loading specialties...</option>
+        </select>
+      </label>
+
+    </div>
+
+    <label class="invite-user-label" for="invite-message">Invitation Message
+      <textarea
+        id="invite-message"
+        name="invitationMessage"
+        rows="4"
+        placeholder="Optional note shown in the invitation email."
+      ></textarea>
+    </label>
+
+    <label class="invite-user-label" for="invite-notes">Administrative Notes
+      <textarea
+        id="invite-notes"
+        name="notes"
+        rows="4"
+        placeholder="Optional internal notes about this invitation."
+      ></textarea>
+    </label>
+
+    <div class="invite-user-actions">
+      <p id="invite-user-loading" class="invite-user-loading hidden" aria-live="polite">
+        Sending invitation...
+      </p>
+      <div class="invite-user-button-group">
+        <button type="button" id="invite-user-reset" class="button button-secondary">Clear</button>
+        <button type="submit" id="invite-user-submit" class="button button-primary">
+          Send Invitation
+        </button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<section id="invite-user-success-card" class="invite-success-card hidden" aria-live="polite">
+  <h3>Invitation created successfully.</h3>
+  <div class="invite-success-grid">
+    <div class="invite-success-item">
+      <span class="invite-success-label">Display Name</span>
+      <span id="invite-success-display-name" class="invite-success-value"></span>
+    </div>
+    <div class="invite-success-item">
+      <span class="invite-success-label">Email</span>
+      <span id="invite-success-email" class="invite-success-value"></span>
+    </div>
+    <div class="invite-success-item">
+      <span class="invite-success-label">Assigned Role</span>
+      <span id="invite-success-role" class="invite-success-value"></span>
+    </div>
+    <div class="invite-success-item">
+      <span class="invite-success-label">Expiration Date</span>
+      <span id="invite-success-expiration" class="invite-success-value"></span>
+    </div>
+  </div>
 </section>

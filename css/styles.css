@@ -223,6 +223,11 @@ body {
   color: var(--abts-text);
 }
 
+.button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .admin-icon {
   width: 20px;
   height: 20px;
@@ -607,6 +612,182 @@ body {
   color: #92140c;
 }
 
+.invite-user-card,
+.invite-success-card {
+  border-radius: 24px;
+  background: var(--white);
+  box-shadow: 0 18px 50px rgba(0, 40, 95, 0.08);
+  padding: 28px;
+}
+
+.invite-success-card {
+  margin-top: 20px;
+  background:
+    linear-gradient(180deg, rgba(232, 247, 230, 0.72), rgba(255, 255, 255, 1) 38%);
+  border: 1px solid rgba(20, 90, 50, 0.12);
+}
+
+.invite-user-intro {
+  margin-bottom: 24px;
+}
+
+.invite-user-eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--abts-blue);
+}
+
+.invite-user-intro h3,
+.invite-success-card h3 {
+  margin: 0;
+  font-size: 1.65rem;
+  color: var(--abts-text);
+}
+
+.invite-user-intro p:last-child {
+  margin: 12px 0 0;
+  max-width: 760px;
+  line-height: 1.6;
+  color: var(--abts-muted);
+}
+
+.invite-user-form {
+  display: grid;
+  gap: 18px;
+}
+
+.invite-user-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+
+.invite-user-label {
+  display: block;
+  font-weight: 600;
+  color: var(--abts-text);
+}
+
+.invite-user-label input,
+.invite-user-label select,
+.invite-user-label textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid #d7dcee;
+  border-radius: 14px;
+  font-size: 1rem;
+  background: var(--white);
+  color: var(--abts-text);
+}
+
+.invite-user-label input,
+.invite-user-label select {
+  min-height: 48px;
+}
+
+.invite-user-label textarea {
+  resize: vertical;
+  min-height: 116px;
+  font: inherit;
+}
+
+.invite-user-label select {
+  padding-right: 44px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--abts-muted) 50%),
+    linear-gradient(135deg, var(--abts-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 22px) calc(50% - 3px),
+    calc(100% - 16px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.invite-user-label input:focus,
+.invite-user-label select:focus,
+.invite-user-label textarea:focus {
+  outline: 2px solid rgba(23, 75, 147, 0.18);
+  border-color: #9eb8e4;
+}
+
+.invite-user-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.invite-user-button-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.invite-user-loading {
+  margin: 0;
+  font-weight: 600;
+  color: var(--abts-blue);
+}
+
+.invite-user-notice {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 0.97rem;
+  font-weight: 600;
+}
+
+.invite-user-notice.hidden {
+  display: none;
+}
+
+.invite-user-notice.success {
+  background: #e8f7e6;
+  color: #145a32;
+}
+
+.invite-user-notice.error {
+  background: #fdecea;
+  color: #92140c;
+}
+
+.invite-success-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  margin-top: 18px;
+}
+
+.invite-success-item {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 0 0 1px rgba(23, 75, 147, 0.08);
+}
+
+.invite-success-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--abts-muted);
+}
+
+.invite-success-value {
+  font-size: 1.02rem;
+  font-weight: 650;
+  color: var(--abts-text);
+}
+
 .institution-overlay {
   position: fixed;
   inset: 0;
@@ -778,6 +959,39 @@ body {
 
 .footer-links a:hover {
   text-decoration: underline;
+}
+
+@media (max-width: 920px) {
+  .invite-user-grid,
+  .invite-success-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .page-shell {
+    padding: 32px 20px 72px;
+  }
+
+  .invite-user-card,
+  .invite-success-card {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .invite-user-actions,
+  .invite-user-button-group,
+  .institution-form-actions,
+  .login-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .invite-user-button-group .button,
+  .institution-form-actions .button,
+  .login-actions .button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 800px) {
