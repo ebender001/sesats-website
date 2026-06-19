@@ -103,6 +103,9 @@ function bindAcceptInvitationPage() {
       form.querySelectorAll("input, button").forEach((element) => {
         element.disabled = true;
       });
+      window.setTimeout(() => {
+        window.location.assign("index.html");
+      }, 1200);
     } catch (error) {
       const message = error?.message || "Unable to accept this invitation right now.";
       setAcceptInvitationNotice(message, "error");
