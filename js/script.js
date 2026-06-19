@@ -17,6 +17,8 @@ const authState = {
 const pageState = {
   institutionsLoaded: false,
   institutionsById: new Map(),
+  institutionsData: [],
+  institutionSortDirection: "asc",
 };
 
 function getPlaceholder(placeholderId) {
@@ -376,6 +378,26 @@ function collectEditInstitutionPayload() {
   };
 }
 
+function getSortedInstitutions(institutions) {
+  const direction = pageState.institutionSortDirection === "desc" ? -1 : 1;
+
+  return [...institutions].sort((left, right) => {
+    const leftName = (left.name || "").toLocaleLowerCase();
+    const rightName = (right.name || "").toLocaleLowerCase();
+
+    if (leftName < rightName) return -1 * direction;
+    if (leftName > rightName) return 1 * direction;
+    return 0;
+  });
+}
+
+function updateInstitutionSortIcon() {
+  const icon = document.getElementById("institution-name-sort-icon");
+  if (!icon) return;
+
+  icon.textContent = pageState.institutionSortDirection === "desc" ? "↓" : "↑";
+}
+
 function openEditInstitutionOverlay(institution) {
   const overlay = document.getElementById("edit-institution-overlay");
   if (!overlay || !institution) return;
@@ -413,15 +435,21 @@ function renderInstitutionRows(institutions) {
 
   if (!Array.isArray(institutions) || institutions.length === 0) {
     pageState.institutionsById = new Map();
+    pageState.institutionsData = [];
+    updateInstitutionSortIcon();
     list.innerHTML = '<div class="institution-message">No institutions found.</div>';
     return;
   }
 
-  pageState.institutionsById = new Map(
-    institutions.map((institution) => [institution.objectId, institution])
-  );
+  const sortedInstitutions = getSortedInstitutions(institutions);
+  pageState.institutionsData = [...institutions];
 
-  list.innerHTML = institutions
+  pageState.institutionsById = new Map(
+    sortedInstitutions.map((institution) => [institution.objectId, institution])
+  );
+  updateInstitutionSortIcon();
+
+  list.innerHTML = sortedInstitutions
     .map((institution) => {
       const name = escapeHtml(institution.name || "Unnamed Institution");
       const city = escapeHtml(institution.city || "No city listed");
@@ -536,6 +564,7 @@ function bindInstitutionsSection() {
   const toggle = document.getElementById("institutions-toggle");
   const cancelButton = document.getElementById("cancel-add-institution");
   const form = document.getElementById("add-institution-form");
+  const sortButton = document.getElementById("institution-name-sort");
   if (!toggle) return;
 
   pageState.institutionsLoaded = false;
@@ -552,6 +581,14 @@ function bindInstitutionsSection() {
       if (isOpen) {
         setInstitutionFormNotice("", "success");
       }
+    });
+  }
+
+  if (sortButton) {
+    sortButton.addEventListener("click", () => {
+      pageState.institutionSortDirection =
+        pageState.institutionSortDirection === "asc" ? "desc" : "asc";
+      renderInstitutionRows(pageState.institutionsData);
     });
   }
 

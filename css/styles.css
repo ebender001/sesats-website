@@ -354,6 +354,26 @@ body {
   color: var(--abts-text);
 }
 
+.institution-sort-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  justify-self: start;
+}
+
+.institution-sort-icon {
+  font-size: 0.9rem;
+  color: var(--abts-muted);
+  line-height: 1;
+}
+
 .institution-row {
   min-height: 68px;
   color: inherit;
@@ -398,7 +418,7 @@ body {
 
 .institution-actions-cell {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .institution-edit-button {
