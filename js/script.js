@@ -2,7 +2,11 @@ const DEFAULT_SECTION = "dashboard";
 const VALID_SECTIONS = new Set([
   "dashboard",
   "users",
+  "users-list",
+  "users-invite",
   "institutions",
+  "institutions-add",
+  "institutions-list",
   "questions",
   "content",
   "reports",
@@ -20,6 +24,24 @@ const pageState = {
   institutionsData: [],
   institutionSortDirection: "asc",
 };
+
+function getMainSection(section) {
+  if (section.startsWith("users-")) {
+    return "users";
+  }
+
+  return section.startsWith("institutions-") ? "institutions" : section;
+}
+
+function getPagePath(section) {
+  if (section === "users") return "components/pages/users/index.html";
+  if (section === "users-list") return "components/pages/users/list.html";
+  if (section === "users-invite") return "components/pages/users/invite.html";
+  if (section === "institutions") return "components/pages/institutions/index.html";
+  if (section === "institutions-add") return "components/pages/institutions/add.html";
+  if (section === "institutions-list") return "components/pages/institutions/list.html";
+  return `components/pages/${section}.html`;
+}
 
 function getPlaceholder(placeholderId) {
   return document.getElementById(placeholderId);
@@ -230,8 +252,20 @@ function getSectionFromHash() {
 
 function setActiveNavLink(section) {
   const navLinks = document.querySelectorAll(".nav-link");
+  const subNavLinks = document.querySelectorAll(".sub-nav-link");
+  const mainSection = getMainSection(section);
 
   navLinks.forEach((link) => {
+    const isActive = link.dataset.section === mainSection;
+    link.classList.toggle("active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+
+  subNavLinks.forEach((link) => {
     const isActive = link.dataset.section === section;
     link.classList.toggle("active", isActive);
     if (isActive) {
@@ -500,111 +534,18 @@ async function fetchInstitutions() {
   }
 }
 
-async function toggleInstitutionsPanel(forceOpen = false) {
-  const shouldOpen = toggleExpandableSection("institutions-toggle", "institutions-content", forceOpen);
-  if (!shouldOpen) return;
-
-  if (shouldOpen && !pageState.institutionsLoaded) {
+async function refreshInstitutionsList() {
+  pageState.institutionsLoaded = false;
+  if (document.getElementById("institutions-list")) {
     await fetchInstitutions();
   }
 }
 
-function toggleExpandableSection(toggleId, contentId, forceOpen = false) {
-  const toggle = document.getElementById(toggleId);
-  const content = document.getElementById(contentId);
-  if (!toggle || !content) return false;
-
-  const shouldOpen = forceOpen || toggle.getAttribute("aria-expanded") !== "true";
-  toggle.setAttribute("aria-expanded", String(shouldOpen));
-  content.classList.toggle("is-open", shouldOpen);
-  return shouldOpen;
-}
-
-function closeExpandableSection(toggleId, contentId) {
-  const toggle = document.getElementById(toggleId);
-  const content = document.getElementById(contentId);
-  if (!toggle || !content) return;
-
-  toggle.setAttribute("aria-expanded", "false");
-  content.classList.remove("is-open");
-}
-
-function collapseInstitutionPanels(except = "") {
-  const sections = [
-    { toggleId: "open-add-institution", contentId: "add-institution-content", key: "add" },
-    { toggleId: "institutions-toggle", contentId: "institutions-content", key: "list" },
-  ];
-
-  sections.forEach((section) => {
-    if (section.key !== except) {
-      closeExpandableSection(section.toggleId, section.contentId);
-    }
-  });
-}
-
-function toggleAddInstitutionCard(forceOpen = false) {
-  if (forceOpen) {
-    collapseInstitutionPanels("add");
-  }
-
-  const isOpen = toggleExpandableSection("open-add-institution", "add-institution-content", forceOpen);
-  if (isOpen) {
-    collapseInstitutionPanels("add");
-  }
-  return isOpen;
-}
-
-async function refreshInstitutionsList() {
-  pageState.institutionsLoaded = false;
-  await toggleInstitutionsPanel(true);
-}
-
-function bindInstitutionsSection() {
-  const addButton = document.getElementById("open-add-institution");
-  const toggle = document.getElementById("institutions-toggle");
+function bindAddInstitutionPage() {
   const cancelButton = document.getElementById("cancel-add-institution");
   const form = document.getElementById("add-institution-form");
-  const sortButton = document.getElementById("institution-name-sort");
-  if (!toggle) return;
 
-  pageState.institutionsLoaded = false;
   setInstitutionsFeedback("", "success");
-
-  toggle.addEventListener("click", async () => {
-    collapseInstitutionPanels("list");
-    await toggleInstitutionsPanel();
-  });
-
-  if (addButton) {
-    addButton.addEventListener("click", () => {
-      const isOpen = toggleAddInstitutionCard();
-      if (isOpen) {
-        setInstitutionFormNotice("", "success");
-      }
-    });
-  }
-
-  if (sortButton) {
-    sortButton.addEventListener("click", () => {
-      pageState.institutionSortDirection =
-        pageState.institutionSortDirection === "asc" ? "desc" : "asc";
-      renderInstitutionRows(pageState.institutionsData);
-    });
-  }
-
-  const list = document.getElementById("institutions-list");
-  if (list) {
-    list.addEventListener("click", (event) => {
-      const editButton = event.target.closest(".institution-edit-button");
-      if (!editButton) return;
-
-      const institutionId = editButton.dataset.institutionId;
-      const institution = pageState.institutionsById.get(institutionId);
-      if (institution) {
-        openEditInstitutionOverlay(institution);
-      }
-    });
-  }
 
   if (cancelButton) {
     cancelButton.addEventListener("click", (event) => {
@@ -629,9 +570,8 @@ function bindInstitutionsSection() {
         await window.back4app.runCloudFunction("addInstitution", payload);
         setInstitutionFormNotice("Institution added successfully.", "success");
         setInstitutionsFeedback(`Added ${payload.name}.`, "success");
-        await refreshInstitutionsList();
+        pageState.institutionsLoaded = false;
         resetInstitutionForm();
-        toggleAddInstitutionCard(true);
       } catch (error) {
         const message = error?.message || "Unable to add institution right now.";
         setInstitutionFormNotice(message, "error");
@@ -639,11 +579,38 @@ function bindInstitutionsSection() {
       }
     });
   }
+}
 
+function bindInstitutionsListPage() {
+  const sortButton = document.getElementById("institution-name-sort");
+  const list = document.getElementById("institutions-list");
   const editOverlay = document.getElementById("edit-institution-overlay");
   const closeEditButton = document.getElementById("close-edit-institution");
   const cancelEditButton = document.getElementById("cancel-edit-institution");
   const editForm = document.getElementById("edit-institution-form");
+
+  setInstitutionsFeedback("", "success");
+
+  if (sortButton) {
+    sortButton.addEventListener("click", () => {
+      pageState.institutionSortDirection =
+        pageState.institutionSortDirection === "asc" ? "desc" : "asc";
+      renderInstitutionRows(pageState.institutionsData);
+    });
+  }
+
+  if (list) {
+    list.addEventListener("click", (event) => {
+      const editButton = event.target.closest(".institution-edit-button");
+      if (!editButton) return;
+
+      const institutionId = editButton.dataset.institutionId;
+      const institution = pageState.institutionsById.get(institutionId);
+      if (institution) {
+        openEditInstitutionOverlay(institution);
+      }
+    });
+  }
 
   [closeEditButton, cancelEditButton].forEach((button) => {
     if (!button) return;
@@ -684,11 +651,17 @@ function bindInstitutionsSection() {
       }
     });
   }
+
+  fetchInstitutions();
 }
 
 function initializeSection(section) {
-  if (section === "institutions") {
-    bindInstitutionsSection();
+  if (section === "institutions-add") {
+    bindAddInstitutionPage();
+  }
+
+  if (section === "institutions-list") {
+    bindInstitutionsListPage();
   }
 }
 
@@ -700,7 +673,7 @@ async function loadPageContent(section) {
   placeholder.setAttribute("aria-busy", "true");
 
   try {
-    const markup = await fetchComponentMarkup(`components/pages/${normalizedSection}.html`);
+    const markup = await fetchComponentMarkup(getPagePath(normalizedSection));
     placeholder.innerHTML = markup;
     initializeSection(normalizedSection);
   } catch (error) {
@@ -723,7 +696,22 @@ async function navigateToSection(section, { updateHash = true } = {}) {
 }
 
 function bindNavLinks() {
-  const navLinks = document.querySelectorAll(".nav-link");
+  const navLinks = document.querySelectorAll(".nav-link, .sub-nav-link");
+  const navItemsWithSubmenus = document.querySelectorAll(".nav-item-has-submenu");
+
+  function usesTapDropdown() {
+    return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  }
+
+  function closeAllDropdowns() {
+    navItemsWithSubmenus.forEach((item) => item.classList.remove("is-open"));
+  }
+
+  navItemsWithSubmenus.forEach((item) => {
+    item.addEventListener("mouseleave", () => {
+      item.classList.remove("submenu-locked");
+    });
+  });
 
   navLinks.forEach((link) => {
     link.addEventListener("click", async (event) => {
@@ -732,8 +720,33 @@ function bindNavLinks() {
       const section = link.dataset.section;
       if (!section) return;
 
+      const parentNavItem = link.closest(".nav-item-has-submenu");
+
+      if (
+        usesTapDropdown() &&
+        parentNavItem &&
+        link.classList.contains("nav-link") &&
+        !parentNavItem.classList.contains("is-open")
+      ) {
+        closeAllDropdowns();
+        parentNavItem.classList.add("is-open");
+        return;
+      }
+
       await navigateToSection(section);
+      if (link.classList.contains("sub-nav-link") && parentNavItem) {
+        parentNavItem.classList.add("submenu-locked");
+        link.blur();
+      }
+      closeAllDropdowns();
     });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!usesTapDropdown()) return;
+    if (!event.target.closest(".nav-item-has-submenu")) {
+      closeAllDropdowns();
+    }
   });
 }
 
