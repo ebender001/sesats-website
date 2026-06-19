@@ -1,0 +1,176 @@
+:root {
+  --abts-navy: #00285f;
+  --abts-dark-navy: #001d47;
+  --abts-blue: #174b93;
+  --abts-light-blue: #d8e6f7;
+  --abts-text: #08285c;
+  --abts-muted: #7c8ba0;
+  --abts-bg: #f4f7fc;
+  --white: #ffffff;
+  --success-bg: #e8f7e6;
+  --success-text: #145a32;
+  --error-bg: #fdecea;
+  --error-text: #92140c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--abts-text);
+  background:
+    radial-gradient(circle at top left, rgba(216, 230, 247, 0.92), rgba(216, 230, 247, 0) 32%),
+    linear-gradient(180deg, #edf3fb 0%, #f8fbff 36%, #f4f7fc 100%);
+}
+
+.accept-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.accept-card {
+  width: min(100%, 560px);
+  border-radius: 28px;
+  background: var(--white);
+  box-shadow: 0 28px 80px rgba(0, 40, 95, 0.16);
+  overflow: hidden;
+}
+
+.accept-card-banner {
+  padding: 28px 28px 24px;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.16), transparent 28%),
+    linear-gradient(135deg, var(--abts-navy), var(--abts-dark-navy));
+  color: var(--white);
+}
+
+.accept-card-eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.84rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  opacity: 0.88;
+}
+
+.accept-card-banner h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+}
+
+.accept-card-banner p:last-child {
+  margin: 12px 0 0;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.accept-form {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+}
+
+.accept-label {
+  display: block;
+  font-weight: 600;
+  color: var(--abts-text);
+}
+
+.accept-label input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 13px 14px;
+  border: 1px solid #d7dcee;
+  border-radius: 14px;
+  font-size: 1rem;
+  color: var(--abts-text);
+  background: var(--white);
+}
+
+.accept-label input:focus {
+  outline: 2px solid rgba(23, 75, 147, 0.18);
+  border-color: #9eb8e4;
+}
+
+.accept-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.accept-submit {
+  padding: 13px 22px;
+  border: none;
+  border-radius: 999px;
+  background: var(--abts-blue);
+  color: var(--white);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accept-submit:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.accept-loading {
+  margin: 0;
+  color: var(--abts-blue);
+  font-weight: 600;
+}
+
+.accept-notice {
+  margin: 24px 28px 0;
+  padding: 13px 14px;
+  border-radius: 14px;
+  font-size: 0.97rem;
+  font-weight: 600;
+}
+
+.accept-notice.hidden,
+.accept-loading.hidden {
+  display: none;
+}
+
+.accept-notice.success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.accept-notice.error {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+@media (max-width: 640px) {
+  .accept-page {
+    padding: 16px;
+  }
+
+  .accept-card-banner,
+  .accept-form {
+    padding: 22px 20px;
+  }
+
+  .accept-notice {
+    margin: 20px 20px 0;
+  }
+
+  .accept-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .accept-submit {
+    width: 100%;
+  }
+}

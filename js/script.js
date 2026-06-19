@@ -529,7 +529,8 @@ function renderInviteSuccess(result) {
   document.getElementById("invite-success-display-name").textContent =
     result.displayName || "";
   document.getElementById("invite-success-email").textContent = result.email || "";
-  document.getElementById("invite-success-role").textContent = result.roleName || "";
+  document.getElementById("invite-success-role").textContent =
+    result.roleDisplayName || result.roleName || "";
   document.getElementById("invite-success-expiration").textContent = formatInvitationExpiration(
     result.tokenExpiresAt
   );
@@ -572,12 +573,8 @@ function renderInviteSpecialtyOptions(specialties) {
   select.innerHTML = [
     '<option value=""></option>',
     ...specialties.map((specialty) => {
-      const primaryLabel = specialty.shortName
-        ? `${specialty.name} (${specialty.shortName})`
-        : specialty.name || "Unnamed Specialty";
-      return `<option value="${escapeHtml(specialty.objectId || "")}">${escapeHtml(
-        primaryLabel
-      )}</option>`;
+      const primaryLabel = specialty.name || "Unnamed Specialty";
+      return `<option value="${escapeHtml(specialty.objectId || "")}">${escapeHtml(primaryLabel)}</option>`;
     }),
   ].join("");
 }

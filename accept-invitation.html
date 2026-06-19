@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accept SESATS Invitation</title>
+  <link rel="stylesheet" href="accept-invitation.css" />
+</head>
+<body>
+  <main class="accept-page">
+    <section class="accept-card">
+      <div class="accept-card-banner">
+        <p class="accept-card-eyebrow">SESATS Administration</p>
+        <h1>Accept Invitation</h1>
+        <p>Create your account by choosing a username and password.</p>
+      </div>
+
+      <div id="accept-invitation-notice" class="accept-notice hidden" role="status" aria-live="polite"></div>
+
+      <form id="accept-invitation-form" class="accept-form">
+        <label class="accept-label" for="accept-username">Username
+          <input id="accept-username" name="username" type="text" autocomplete="username" required />
+        </label>
+
+        <label class="accept-label" for="accept-password">Password
+          <input id="accept-password" name="password" type="password" autocomplete="new-password" required />
+        </label>
+
+        <label class="accept-label" for="accept-confirm-password">Confirm Password
+          <input
+            id="accept-confirm-password"
+            name="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            required
+          />
+        </label>
+
+        <div class="accept-actions">
+          <p id="accept-invitation-loading" class="accept-loading hidden" aria-live="polite">
+            Creating your account...
+          </p>
+          <button type="submit" id="accept-invitation-submit" class="accept-submit">
+            Accept Invitation
+          </button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/parse/dist/parse.min.js"></script>
+  <script src="js/back4app.js"></script>
+  <script src="accept-invitation.js"></script>
+</body>
+</html>
