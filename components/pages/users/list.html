@@ -2,7 +2,20 @@
   <h2>List Users</h2>
 </section>
 
-<section class="placeholder-card">
-  <div class="placeholder-icon">👥</div>
-  <p>User listing content will be added here.</p>
+<section class="user-list-card">
+  <div id="users-feedback" class="user-list-message hidden" role="status" aria-live="polite"></div>
+
+  <div class="user-list-header">
+    <button type="button" class="user-sort-button" id="user-display-name-sort" aria-label="Sort by display name">
+      <span>Display Name</span>
+      <span class="user-sort-icon" id="user-display-name-sort-icon" aria-hidden="true">↑</span>
+    </button>
+    <span>Institution</span>
+    <span>Specialty</span>
+    <span class="user-actions-heading">Edit</span>
+  </div>
+
+  <div id="users-list" class="user-list-body">
+    <div class="user-list-message">Loading users...</div>
+  </div>
 </section>

@@ -21,7 +21,16 @@
         <a href="#institutions-add" class="sub-nav-link" data-section="institutions-add">Add Institution</a>
       </nav>
     </div>
-    <a href="#questions" class="nav-link" data-section="questions">Questions</a>
+    <div class="nav-item nav-item-has-submenu">
+      <a href="#questions" class="nav-link nav-link-has-submenu" data-section="questions">
+        <span>Questions</span>
+        <span class="nav-link-caret" aria-hidden="true">▾</span>
+      </a>
+      <nav class="nav-dropdown" id="questions-subnav" aria-label="Questions submenu">
+        <a href="#questions-list" class="sub-nav-link" data-section="questions-list">List Questions</a>
+        <a href="#questions-add" class="sub-nav-link" data-section="questions-add">Add New Question</a>
+      </nav>
+    </div>
     <a href="#content" class="nav-link" data-section="content">Content</a>
     <a href="#reports" class="nav-link" data-section="reports">Reports</a>
     <a href="#settings" class="nav-link" data-section="settings">Settings</a>

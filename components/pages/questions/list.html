@@ -1,0 +1,85 @@
+<section class="page-title">
+  <h2>Questions</h2>
+</section>
+
+<section class="question-list-card">
+  <div id="questions-feedback" class="question-list-message hidden" role="status" aria-live="polite"></div>
+
+  <div class="question-toolbar">
+    <div class="question-filter-grid">
+      <label class="question-filter-label" for="question-search">
+        <span>Search</span>
+        <input
+          id="question-search"
+          class="question-filter-control"
+          type="search"
+          placeholder="Search stem, specialty, section, or answer"
+        />
+      </label>
+
+      <label class="question-filter-label" for="question-specialty-filter">
+        <span>Specialty</span>
+        <select id="question-specialty-filter" class="question-filter-control">
+          <option value="">All specialties</option>
+        </select>
+      </label>
+
+      <label class="question-filter-label" for="question-section-filter">
+        <span>Section</span>
+        <select id="question-section-filter" class="question-filter-control">
+          <option value="">All sections</option>
+        </select>
+      </label>
+
+      <label class="question-filter-label" for="question-status-filter">
+        <span>Editor Status</span>
+        <select id="question-status-filter" class="question-filter-control">
+          <option value="">All statuses</option>
+        </select>
+      </label>
+
+      <label class="question-filter-label" for="question-difficulty-filter">
+        <span>Difficulty</span>
+        <select id="question-difficulty-filter" class="question-filter-control">
+          <option value="">All difficulties</option>
+        </select>
+      </label>
+
+      <label class="question-filter-label" for="question-sort">
+        <span>Sort</span>
+        <select id="question-sort" class="question-filter-control">
+          <option value="default">Specialty / Section / Question #</option>
+          <option value="updatedAt">Last Updated</option>
+          <option value="lastReviewedAt">Last Reviewed</option>
+          <option value="editorStatus">Editor Status</option>
+          <option value="difficulty">Difficulty</option>
+          <option value="questionNumber">Question Number</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="question-table-shell">
+    <div class="question-list-header">
+      <span>Question #</span>
+      <span>Specialty</span>
+      <span>Section</span>
+      <span>Stem Preview</span>
+      <span>Correct Answer</span>
+      <span>Difficulty</span>
+      <span>Editor Status</span>
+      <span>Last Reviewed</span>
+      <span>Last Updated</span>
+      <span class="question-actions-heading">Edit</span>
+    </div>
+
+    <div id="questions-list" class="question-list-body">
+      <div class="question-list-message">Loading questions...</div>
+    </div>
+  </div>
+
+  <div class="question-list-footer">
+    <p id="questions-count" class="question-list-count">Loading questions...</p>
+    <button type="button" id="questions-load-more" class="button button-secondary hidden">Load More</button>
+  </div>
+</section>

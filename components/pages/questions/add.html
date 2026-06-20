@@ -1,0 +1,93 @@
+<section class="page-title">
+  <h2>Add New Question</h2>
+</section>
+
+<section class="invite-user-card">
+  <div class="question-form-header">
+    <div class="invite-user-intro">
+      <p class="invite-user-eyebrow">ABTS SESATS Administration</p>
+      <h3>Question Setup</h3>
+      <p>Start by selecting a specialty, topic, and difficulty.</p>
+    </div>
+
+    <button type="button" id="import-question-button" class="button button-secondary">
+      Import Question
+    </button>
+  </div>
+
+  <div id="questions-feedback" class="question-list-message hidden" role="status" aria-live="polite"></div>
+
+  <form id="add-question-form" class="invite-user-form">
+    <div class="invite-user-grid question-setup-grid">
+      <label class="invite-user-label" for="add-question-specialty">
+        Specialty
+        <select id="add-question-specialty" name="specialty" required disabled>
+          <option value="">Loading specialties...</option>
+        </select>
+      </label>
+
+      <label class="invite-user-label" for="add-question-topic">
+        Topic
+        <select id="add-question-topic" name="topic" disabled>
+          <option value="">Topic options coming soon</option>
+        </select>
+      </label>
+
+      <label class="invite-user-label" for="add-question-difficulty">
+        Difficulty
+        <select id="add-question-difficulty" name="difficulty" required>
+          <option value="Easy">Easy</option>
+          <option value="Average" selected>Average</option>
+          <option value="Difficult">Difficult</option>
+        </select>
+      </label>
+    </div>
+
+    <label class="invite-user-label" for="add-question-stem">
+      Question Stem
+      <textarea
+        id="add-question-stem"
+        name="stem"
+        rows="6"
+        placeholder="Enter the question stem here."
+      ></textarea>
+    </label>
+
+    <div class="question-editor-row">
+      <label class="invite-user-label question-type-field" for="add-question-type">
+        Question Type
+        <select id="add-question-type" name="questionType" required>
+          <option value="multiple_choice" selected>Multiple Choice</option>
+          <option value="true_false">True / False</option>
+        </select>
+      </label>
+    </div>
+
+    <section class="question-options-panel" aria-labelledby="question-options-title">
+      <div class="question-options-panel-header">
+        <div>
+          <h4 id="question-options-title">Answer Options</h4>
+          <p id="question-options-help" class="question-options-help">
+            Default multiple-choice questions start with five answer rows. Add, remove, drag, or shuffle as needed.
+          </p>
+        </div>
+        <div class="question-options-actions">
+          <span id="shuffle-question-options-tooltip" class="question-button-tooltip">
+            <button type="button" id="shuffle-question-options" class="button button-secondary">
+              Random Shuffle Options
+            </button>
+          </span>
+          <span id="add-question-option-tooltip" class="question-button-tooltip">
+            <button type="button" id="add-question-option" class="button button-secondary">
+              Add Option
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <div id="question-option-validation" class="question-option-validation hidden" role="status" aria-live="polite"></div>
+
+      <div id="question-options-list" class="question-options-list"></div>
+    </section>
+  </form>
+</section>

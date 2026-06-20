@@ -8,6 +8,8 @@ const VALID_SECTIONS = new Set([
   "institutions-add",
   "institutions-list",
   "questions",
+  "questions-add",
+  "questions-list",
   "content",
   "reports",
   "settings",
@@ -18,11 +20,22 @@ const authState = {
   userName: "Admin User",
 };
 
+const QUESTION_TYPE_MULTIPLE_CHOICE = "multiple_choice";
+const QUESTION_TYPE_TRUE_FALSE = "true_false";
+
 const pageState = {
   institutionsLoaded: false,
   institutionsById: new Map(),
   institutionsData: [],
   institutionSortDirection: "asc",
+  usersLoaded: false,
+  usersById: new Map(),
+  usersData: [],
+  userSortDirection: "asc",
+  questionsLoaded: false,
+  questionsData: [],
+  questionVisibleCount: 100,
+  questionEditor: null,
   activeInstitutions: [],
   activeSpecialties: [],
   specialtiesLoaded: false,
@@ -33,16 +46,27 @@ function getMainSection(section) {
     return "users";
   }
 
-  return section.startsWith("institutions-") ? "institutions" : section;
+  if (section.startsWith("institutions-")) {
+    return "institutions";
+  }
+
+  return section.startsWith("questions-") ? "questions" : section;
 }
 
 function getPagePath(section) {
+  if (section === "dashboard") return "components/pages/dashboard/index.html";
   if (section === "users") return "components/pages/users/index.html";
   if (section === "users-list") return "components/pages/users/list.html";
   if (section === "users-invite") return "components/pages/users/invite.html";
   if (section === "institutions") return "components/pages/institutions/index.html";
   if (section === "institutions-add") return "components/pages/institutions/add.html";
   if (section === "institutions-list") return "components/pages/institutions/list.html";
+  if (section === "questions") return "components/pages/questions/index.html";
+  if (section === "questions-add") return "components/pages/questions/add.html";
+  if (section === "questions-list") return "components/pages/questions/list.html";
+  if (section === "content") return "components/pages/content/index.html";
+  if (section === "reports") return "components/pages/reports/index.html";
+  if (section === "settings") return "components/pages/settings/index.html";
   return `components/pages/${section}.html`;
 }
 
@@ -341,6 +365,22 @@ function setInstitutionFormNotice(message, type) {
   notice.classList.add(type === "success" ? "success" : "error");
 }
 
+function setUsersFeedback(message, type) {
+  const feedback = document.getElementById("users-feedback");
+  if (!feedback) return;
+
+  if (!message) {
+    feedback.textContent = "";
+    feedback.classList.add("hidden");
+    feedback.classList.remove("success", "error");
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.classList.remove("hidden", "success", "error");
+  feedback.classList.add(type === "success" ? "success" : "error");
+}
+
 function setInviteUserNotice(message, type) {
   const notice = document.getElementById("invite-user-feedback");
   if (!notice) return;
@@ -387,6 +427,509 @@ function resetInstitutionForm() {
 function clearInstitutionForm() {
   resetInstitutionForm();
   setInstitutionFormNotice("", "success");
+}
+
+function getUserLastName(displayName) {
+  const normalizedName = String(displayName || "").trim().replace(/\s+/g, " ");
+  if (!normalizedName) return "";
+
+  const parts = normalizedName.split(" ");
+  return parts[parts.length - 1].toLowerCase();
+}
+
+function formatUserDisplayName(user) {
+  const displayName = String(user?.displayName || "").trim() || "Unnamed User";
+  const credentials = String(user?.credentials || "").trim();
+  return credentials ? `${displayName}, ${credentials}` : displayName;
+}
+
+function setQuestionsFeedback(message, type) {
+  const feedback = document.getElementById("questions-feedback");
+  if (!feedback) return;
+
+  if (!message) {
+    feedback.textContent = "";
+    feedback.classList.add("hidden");
+    feedback.classList.remove("success", "error");
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.classList.remove("hidden", "success", "error");
+  feedback.classList.add(type === "success" ? "success" : "error");
+}
+
+function buildQuestionEditUrl(objectId) {
+  return `edit.html?id=${encodeURIComponent(objectId)}`;
+}
+
+function formatQuestionListDate(value) {
+  if (!value) return "Not set";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function truncateQuestionPreview(value, maxLength = 140) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function compareQuestionText(leftValue, rightValue) {
+  return String(leftValue || "").localeCompare(String(rightValue || ""), undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
+function getQuestionOrderValue(question) {
+  const orderValue = question?.questionNumber ?? question?.displayOrder ?? "";
+  if (typeof orderValue === "number") {
+    return { rank: orderValue, label: String(orderValue) };
+  }
+
+  const normalized = String(orderValue || "").trim();
+  const numericValue = Number(normalized);
+
+  if (normalized && Number.isFinite(numericValue)) {
+    return { rank: numericValue, label: normalized };
+  }
+
+  return {
+    rank: normalized ? Number.MAX_SAFE_INTEGER - 1 : Number.MAX_SAFE_INTEGER,
+    label: normalized,
+  };
+}
+
+function getQuestionStatusClassName(value, prefix) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized ? `${prefix}-${normalized}` : `${prefix}-default`;
+}
+
+async function fetchCorrectAnswersByQuestionIds(questionIds) {
+  if (!Array.isArray(questionIds) || questionIds.length === 0 || typeof Parse === "undefined") {
+    return new Map();
+  }
+
+  const Question = Parse.Object.extend("Question");
+  const QuestionOption = Parse.Object.extend("QuestionOption");
+  const questionPointers = questionIds.map((questionId) => {
+    const question = new Question();
+    question.id = questionId;
+    return question;
+  });
+
+  const answersById = new Map();
+  const chunkSize = 200;
+
+  for (let index = 0; index < questionPointers.length; index += chunkSize) {
+    const query = new Parse.Query(QuestionOption);
+    query.containedIn("question", questionPointers.slice(index, index + chunkSize));
+    query.equalTo("isCorrect", true);
+    query.ascending("sortOrder");
+    query.ascending("label");
+    query.limit(1000);
+
+    const options = await query.find();
+
+    options.forEach((option) => {
+      const questionId = option.get("question")?.id;
+      if (!questionId || answersById.has(questionId)) return;
+
+      const label = String(option.get("label") || "").trim();
+      const text = String(option.get("text") || "").trim();
+      answersById.set(questionId, [label, text].filter(Boolean).join(". "));
+    });
+  }
+
+  return answersById;
+}
+
+function normalizeQuestionRecord(question, correctAnswersById) {
+  const questionNumberValue = question.get("questionNumber");
+  const displayOrderValue = question.get("displayOrder");
+  const sectionValue = question.get("section") || question.get("topic") || "";
+  const stemValue = question.get("questionText") || question.get("stem") || "";
+  const editorStatusValue = question.get("editorStatus") || question.get("status") || "";
+  const lastReviewedValue = question.get("lastReviewedAt") || question.get("approvedAt") || null;
+
+  return {
+    objectId: question.id,
+    questionNumber: questionNumberValue ?? displayOrderValue ?? "",
+    displayOrder: displayOrderValue ?? questionNumberValue ?? "",
+    specialty: question.get("specialty") || "",
+    section: sectionValue,
+    questionText: stemValue,
+    stemPreview: truncateQuestionPreview(stemValue, 140),
+    correctAnswer:
+      correctAnswersById.get(question.id) || String(question.get("correctAnswer") || "").trim(),
+    difficulty: question.get("difficulty") || "",
+    editorStatus: editorStatusValue,
+    updatedAt: question.updatedAt ? question.updatedAt.toISOString() : "",
+    lastReviewedAt: lastReviewedValue instanceof Date ? lastReviewedValue.toISOString() : "",
+  };
+}
+
+function populateQuestionFilterSelect(elementId, values, emptyLabel) {
+  const select = document.getElementById(elementId);
+  if (!select) return;
+
+  const currentValue = select.value;
+  const options = [
+    `<option value="">${emptyLabel}</option>`,
+    ...values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
+  ];
+
+  select.innerHTML = options.join("");
+  if (values.includes(currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function syncQuestionFilterOptions(questions) {
+  const specialties = [...new Set(questions.map((question) => question.specialty).filter(Boolean))].sort(
+    compareQuestionText
+  );
+  const sections = [...new Set(questions.map((question) => question.section).filter(Boolean))].sort(
+    compareQuestionText
+  );
+  const statuses = [...new Set(questions.map((question) => question.editorStatus).filter(Boolean))].sort(
+    compareQuestionText
+  );
+  const difficulties = [...new Set(questions.map((question) => question.difficulty).filter(Boolean))].sort(
+    compareQuestionText
+  );
+
+  populateQuestionFilterSelect("question-specialty-filter", specialties, "All specialties");
+  populateQuestionFilterSelect("question-section-filter", sections, "All sections");
+  populateQuestionFilterSelect("question-status-filter", statuses, "All statuses");
+  populateQuestionFilterSelect("question-difficulty-filter", difficulties, "All difficulties");
+}
+
+function renderQuestionAddSpecialtyOptions(specialties) {
+  const select = document.getElementById("add-question-specialty");
+  if (!select) return;
+
+  if (!Array.isArray(specialties) || specialties.length === 0) {
+    select.innerHTML = '<option value="">No active specialties available</option>';
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  select.innerHTML = [
+    '<option value=""></option>',
+    ...specialties.map((specialty) => {
+      const label = specialty.name || "Unnamed Specialty";
+      return `<option value="${escapeHtml(specialty.objectId || "")}">${escapeHtml(label)}</option>`;
+    }),
+  ].join("");
+}
+
+function bindAutoResizingTextarea(textarea) {
+  if (!textarea) return;
+
+  const resizeTextarea = () => {
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+
+  textarea.addEventListener("input", resizeTextarea);
+  resizeTextarea();
+}
+
+function createQuestionOption(overrides = {}) {
+  const optionId = `option-${pageState.questionEditor.nextOptionId++}`;
+  return {
+    id: optionId,
+    text: "",
+    isCorrect: false,
+    locked: false,
+    ...overrides,
+  };
+}
+
+function buildMultipleChoiceOptions(count = 5) {
+  return Array.from({ length: count }, () => createQuestionOption());
+}
+
+function buildTrueFalseOptions() {
+  return [
+    createQuestionOption({ text: "True", locked: true }),
+    createQuestionOption({ text: "False", locked: true }),
+  ];
+}
+
+function initializeQuestionEditorState() {
+  pageState.questionEditor = {
+    questionType: QUESTION_TYPE_MULTIPLE_CHOICE,
+    nextOptionId: 1,
+    dragOptionId: "",
+    options: [],
+  };
+
+  pageState.questionEditor.options = buildMultipleChoiceOptions();
+}
+
+function getQuestionOptionLabel(index) {
+  let label = "";
+  let currentIndex = index;
+
+  do {
+    label = String.fromCharCode(65 + (currentIndex % 26)) + label;
+    currentIndex = Math.floor(currentIndex / 26) - 1;
+  } while (currentIndex >= 0);
+
+  return label;
+}
+
+function questionEditorHasOptionContent() {
+  const editor = pageState.questionEditor;
+  if (!editor) return false;
+
+  return editor.options.some((option) => option.text.trim() || option.isCorrect);
+}
+
+function updateQuestionTypeHelpText() {
+  const helpText = document.getElementById("question-options-help");
+  if (!helpText || !pageState.questionEditor) return;
+
+  helpText.textContent =
+    pageState.questionEditor.questionType === QUESTION_TYPE_TRUE_FALSE
+      ? "True / False questions always contain exactly two locked options and one correct answer."
+      : "Default multiple-choice questions start with five answer rows. Add, remove, drag, or shuffle as needed.";
+}
+
+function renderQuestionOptionValidation() {
+  const notice = document.getElementById("question-option-validation");
+  if (!notice || !pageState.questionEditor) return;
+
+  const editor = pageState.questionEditor;
+  const populatedOptions = editor.options.filter((option) => option.text.trim().length > 0);
+  const correctOptions = populatedOptions.filter((option) => option.isCorrect);
+  const warnings = [];
+  const blockers = [];
+
+  if (editor.questionType === QUESTION_TYPE_TRUE_FALSE) {
+    const trueFalseValues = editor.options.map((option) => option.text.trim());
+    if (trueFalseValues.length !== 2 || trueFalseValues[0] !== "True" || trueFalseValues[1] !== "False") {
+      blockers.push("True / False questions must contain exactly the options True and False.");
+    }
+  } else {
+    if (editor.options.length < 3) {
+      blockers.push("Multiple-choice questions must contain at least three answer options.");
+    }
+
+    if (populatedOptions.length < 3) {
+      blockers.push("Publish/approval requires at least three populated answer options.");
+    }
+  }
+
+  if (correctOptions.length !== 1) {
+    blockers.push("Exactly one correct answer must be selected.");
+  }
+
+  if (blockers.length === 0 && warnings.length === 0) {
+    notice.textContent = "Answer options meet current publish/approval requirements.";
+    notice.classList.remove("hidden", "warning", "error");
+    notice.classList.add("success");
+    return;
+  }
+
+  notice.classList.remove("hidden", "success", "warning", "error");
+  if (blockers.length > 0) {
+    notice.textContent = [...blockers, ...warnings].join(" ");
+    notice.classList.add("error");
+    return;
+  }
+
+  notice.textContent = warnings.join(" ");
+  notice.classList.add("warning");
+}
+
+function renderQuestionOptionsEditor() {
+  const list = document.getElementById("question-options-list");
+  const shuffleButton = document.getElementById("shuffle-question-options");
+  const shuffleTooltip = document.getElementById("shuffle-question-options-tooltip");
+  const addButton = document.getElementById("add-question-option");
+  const addTooltip = document.getElementById("add-question-option-tooltip");
+  if (!list || !pageState.questionEditor) return;
+
+  const editor = pageState.questionEditor;
+  const isTrueFalse = editor.questionType === QUESTION_TYPE_TRUE_FALSE;
+  const disableRemoveButton = isTrueFalse || editor.options.length <= 3;
+  const populatedOptionCount = editor.options.filter((option) => option.text.trim().length > 0).length;
+
+  list.innerHTML = editor.options
+    .map((option, index) => {
+      const optionLabel = getQuestionOptionLabel(index);
+      const optionText = escapeHtml(option.text);
+      const optionId = escapeHtml(option.id);
+
+      return `
+        <div
+          class="question-option-row${isTrueFalse ? " is-locked" : ""}"
+          data-option-id="${optionId}"
+          draggable="${isTrueFalse ? "false" : "true"}"
+        >
+          <button
+            type="button"
+            class="question-option-drag"
+            aria-label="Drag to reorder option ${optionLabel}"
+            title="${isTrueFalse ? "Reordering is unavailable for True / False questions" : "Drag to reorder"}"
+            ${isTrueFalse ? "disabled" : ""}
+          >
+            ⋮⋮
+          </button>
+          <span class="question-option-label">${optionLabel}</span>
+          <label class="question-option-correct">
+            <input
+              type="radio"
+              name="question-correct-option"
+              class="question-option-correct-input"
+              data-option-id="${optionId}"
+              ${option.isCorrect ? "checked" : ""}
+            />
+            <span>Correct</span>
+          </label>
+          <textarea
+            class="question-option-text"
+            data-option-id="${optionId}"
+            rows="2"
+            placeholder="Enter answer option text."
+            ${isTrueFalse ? "readonly" : ""}
+          >${optionText}</textarea>
+          <span
+            class="question-button-tooltip"
+            title="${
+              isTrueFalse
+                ? "Remove is unavailable for True / False questions."
+                : disableRemoveButton
+                  ? "Multiple-choice questions must keep at least three options."
+                  : ""
+            }"
+          >
+            <button
+              type="button"
+              class="question-option-remove button button-secondary"
+              data-option-id="${optionId}"
+              ${disableRemoveButton ? "disabled" : ""}
+            >
+              Remove
+            </button>
+          </span>
+        </div>
+      `;
+    })
+    .join("");
+
+  list.querySelectorAll(".question-option-text").forEach(bindAutoResizingTextarea);
+
+  if (shuffleButton) {
+    shuffleButton.classList.toggle("hidden", isTrueFalse);
+    shuffleButton.disabled = isTrueFalse || populatedOptionCount < 3;
+    if (shuffleTooltip) {
+      shuffleTooltip.title = isTrueFalse
+        ? "Random shuffle is unavailable for True / False questions."
+        : populatedOptionCount < 3
+          ? "Enter text for at least three options before shuffling."
+          : "";
+    }
+  }
+
+  if (addButton) {
+    addButton.classList.toggle("hidden", isTrueFalse);
+    addButton.disabled = isTrueFalse || editor.options.length >= 5;
+    if (addTooltip) {
+      addTooltip.title = isTrueFalse
+        ? "Add Option is unavailable for True / False questions."
+        : editor.options.length >= 5
+          ? "A maximum of five options is allowed."
+          : "";
+    }
+  }
+
+  updateQuestionTypeHelpText();
+  renderQuestionOptionValidation();
+}
+
+function setQuestionEditorType(nextType) {
+  if (!pageState.questionEditor) return;
+
+  pageState.questionEditor.questionType = nextType;
+  pageState.questionEditor.options =
+    nextType === QUESTION_TYPE_TRUE_FALSE
+      ? buildTrueFalseOptions()
+      : buildMultipleChoiceOptions();
+
+  renderQuestionOptionsEditor();
+}
+
+function compactEmptyQuestionOptions() {
+  const editor = pageState.questionEditor;
+  if (!editor || editor.questionType !== QUESTION_TYPE_MULTIPLE_CHOICE) return;
+
+  editor.options = editor.options.filter((option) => option.text.trim().length > 0);
+}
+
+function moveQuestionOption(sourceId, targetId) {
+  const editor = pageState.questionEditor;
+  if (!editor || !sourceId || !targetId || sourceId === targetId) return;
+
+  compactEmptyQuestionOptions();
+
+  const sourceIndex = editor.options.findIndex((option) => option.id === sourceId);
+  const targetIndex = editor.options.findIndex((option) => option.id === targetId);
+
+  if (sourceIndex < 0 || targetIndex < 0) return;
+
+  const [movedOption] = editor.options.splice(sourceIndex, 1);
+  editor.options.splice(targetIndex, 0, movedOption);
+  renderQuestionOptionsEditor();
+}
+
+function shuffleQuestionOptions() {
+  const editor = pageState.questionEditor;
+  if (!editor || editor.questionType !== QUESTION_TYPE_MULTIPLE_CHOICE) return;
+
+  const populatedOptionCount = editor.options.filter((option) => option.text.trim().length > 0).length;
+  if (populatedOptionCount < 3) {
+    return;
+  }
+
+  const hasEnteredText = editor.options.some((option) => option.text.trim().length > 0);
+  if (hasEnteredText && !window.confirm("Shuffle the current answer options? Their order will change.")) {
+    return;
+  }
+
+  compactEmptyQuestionOptions();
+
+  const shuffledOptions = [...editor.options];
+  for (let index = shuffledOptions.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffledOptions[index], shuffledOptions[swapIndex]] = [
+      shuffledOptions[swapIndex],
+      shuffledOptions[index],
+    ];
+  }
+
+  editor.options = shuffledOptions;
+  renderQuestionOptionsEditor();
 }
 
 function resetInviteSuccessCard() {
@@ -592,11 +1135,37 @@ function getSortedInstitutions(institutions) {
   });
 }
 
+function getSortedUsers(users) {
+  const direction = pageState.userSortDirection === "desc" ? -1 : 1;
+
+  return [...users].sort((left, right) => {
+    const leftLastName = getUserLastName(left?.displayName);
+    const rightLastName = getUserLastName(right?.displayName);
+
+    if (leftLastName < rightLastName) return -1 * direction;
+    if (leftLastName > rightLastName) return 1 * direction;
+
+    const leftDisplayName = String(left?.displayName || "").trim().toLowerCase();
+    const rightDisplayName = String(right?.displayName || "").trim().toLowerCase();
+
+    if (leftDisplayName < rightDisplayName) return -1 * direction;
+    if (leftDisplayName > rightDisplayName) return 1 * direction;
+    return 0;
+  });
+}
+
 function updateInstitutionSortIcon() {
   const icon = document.getElementById("institution-name-sort-icon");
   if (!icon) return;
 
   icon.textContent = pageState.institutionSortDirection === "desc" ? "↓" : "↑";
+}
+
+function updateUserSortIcon() {
+  const icon = document.getElementById("user-display-name-sort-icon");
+  if (!icon) return;
+
+  icon.textContent = pageState.userSortDirection === "desc" ? "↓" : "↑";
 }
 
 function openEditInstitutionOverlay(institution) {
@@ -685,6 +1254,289 @@ function renderInstitutionRows(institutions) {
     .join("");
 }
 
+function renderUserRows(users) {
+  const list = document.getElementById("users-list");
+  if (!list) return;
+
+  if (!Array.isArray(users) || users.length === 0) {
+    pageState.usersById = new Map();
+    pageState.usersData = [];
+    updateUserSortIcon();
+    list.innerHTML = '<div class="user-list-message">No users found.</div>';
+    return;
+  }
+
+  const sortedUsers = getSortedUsers(users);
+  pageState.usersData = [...users];
+  pageState.usersById = new Map(sortedUsers.map((user) => [user.objectId, user]));
+  updateUserSortIcon();
+
+  list.innerHTML = sortedUsers
+    .map((user) => {
+      const objectId = escapeHtml(user.objectId || "");
+      const displayName = escapeHtml(formatUserDisplayName(user));
+      const institutionName = escapeHtml(user.institutionName || "No institution listed");
+      const specialtyName = escapeHtml(user.specialtyName || "No specialty listed");
+      const ariaName = escapeHtml(user.displayName || "user");
+
+      return `
+        <div class="user-row">
+          <span class="user-display-name">${displayName}</span>
+          <span class="user-institution">${institutionName}</span>
+          <span class="user-specialty">${specialtyName}</span>
+          <span class="user-actions-cell">
+            <button
+              type="button"
+              class="user-edit-button"
+              data-user-id="${objectId}"
+              aria-label="Edit ${ariaName}"
+              title="Edit user"
+            >
+              ✎
+            </button>
+          </span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function compareQuestionOrder(leftQuestion, rightQuestion) {
+  const leftOrder = getQuestionOrderValue(leftQuestion);
+  const rightOrder = getQuestionOrderValue(rightQuestion);
+
+  if (leftOrder.rank !== rightOrder.rank) {
+    return leftOrder.rank - rightOrder.rank;
+  }
+
+  return compareQuestionText(leftOrder.label, rightOrder.label);
+}
+
+function compareQuestionDefault(leftQuestion, rightQuestion) {
+  const specialtyComparison = compareQuestionText(leftQuestion.specialty, rightQuestion.specialty);
+  if (specialtyComparison !== 0) return specialtyComparison;
+
+  const sectionComparison = compareQuestionText(leftQuestion.section, rightQuestion.section);
+  if (sectionComparison !== 0) return sectionComparison;
+
+  const questionNumberComparison = compareQuestionOrder(leftQuestion, rightQuestion);
+  if (questionNumberComparison !== 0) return questionNumberComparison;
+
+  return new Date(rightQuestion.updatedAt || 0) - new Date(leftQuestion.updatedAt || 0);
+}
+
+function sortQuestionsForDisplay(questions, sortKey) {
+  const list = [...questions];
+
+  list.sort((leftQuestion, rightQuestion) => {
+    if (sortKey === "updatedAt") {
+      const updatedComparison =
+        new Date(rightQuestion.updatedAt || 0) - new Date(leftQuestion.updatedAt || 0);
+      return updatedComparison || compareQuestionDefault(leftQuestion, rightQuestion);
+    }
+
+    if (sortKey === "lastReviewedAt") {
+      const reviewedComparison =
+        new Date(rightQuestion.lastReviewedAt || 0) -
+        new Date(leftQuestion.lastReviewedAt || 0);
+      return reviewedComparison || compareQuestionDefault(leftQuestion, rightQuestion);
+    }
+
+    if (sortKey === "editorStatus") {
+      const statusComparison = compareQuestionText(
+        leftQuestion.editorStatus,
+        rightQuestion.editorStatus
+      );
+      return statusComparison || compareQuestionDefault(leftQuestion, rightQuestion);
+    }
+
+    if (sortKey === "difficulty") {
+      const difficultyComparison = compareQuestionText(
+        leftQuestion.difficulty,
+        rightQuestion.difficulty
+      );
+      return difficultyComparison || compareQuestionDefault(leftQuestion, rightQuestion);
+    }
+
+    if (sortKey === "questionNumber") {
+      return compareQuestionOrder(leftQuestion, rightQuestion) || compareQuestionDefault(leftQuestion, rightQuestion);
+    }
+
+    return compareQuestionDefault(leftQuestion, rightQuestion);
+  });
+
+  return list;
+}
+
+function getQuestionFilterValues() {
+  return {
+    searchTerm: document.getElementById("question-search")?.value.trim().toLowerCase() || "",
+    specialty: document.getElementById("question-specialty-filter")?.value || "",
+    section: document.getElementById("question-section-filter")?.value || "",
+    editorStatus: document.getElementById("question-status-filter")?.value || "",
+    difficulty: document.getElementById("question-difficulty-filter")?.value || "",
+    sortKey: document.getElementById("question-sort")?.value || "default",
+  };
+}
+
+function getFilteredQuestions() {
+  const { searchTerm, specialty, section, editorStatus, difficulty } = getQuestionFilterValues();
+
+  return pageState.questionsData.filter((question) => {
+    if (specialty && question.specialty !== specialty) return false;
+    if (section && question.section !== section) return false;
+    if (editorStatus && question.editorStatus !== editorStatus) return false;
+    if (difficulty && question.difficulty !== difficulty) return false;
+
+    if (!searchTerm) return true;
+
+    const haystack = [
+      question.questionText,
+      question.section,
+      question.specialty,
+      question.correctAnswer,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(searchTerm);
+  });
+}
+
+function updateQuestionListFooter(totalMatchingCount, displayedCount) {
+  const count = document.getElementById("questions-count");
+  const loadMoreButton = document.getElementById("questions-load-more");
+  if (count) {
+    count.textContent =
+      totalMatchingCount === 0
+        ? "No questions to display."
+        : `Showing ${displayedCount} of ${totalMatchingCount} matching questions.`;
+  }
+
+  if (loadMoreButton) {
+    loadMoreButton.classList.toggle("hidden", displayedCount >= totalMatchingCount);
+  }
+}
+
+function navigateToQuestionEditor(questionId) {
+  if (!questionId) return;
+  window.location.href = buildQuestionEditUrl(questionId);
+}
+
+function renderQuestionRows() {
+  const list = document.getElementById("questions-list");
+  if (!list) return;
+
+  const { sortKey } = getQuestionFilterValues();
+  const filteredQuestions = getFilteredQuestions();
+
+  if (filteredQuestions.length === 0) {
+    list.innerHTML = '<div class="question-list-message">No questions match the current filters.</div>';
+    updateQuestionListFooter(0, 0);
+    return;
+  }
+
+  const sortedQuestions = sortQuestionsForDisplay(filteredQuestions, sortKey);
+  const displayedQuestions = sortedQuestions.slice(0, pageState.questionVisibleCount);
+
+  list.innerHTML = displayedQuestions
+    .map((question) => {
+      const questionNumberLabel = escapeHtml(getQuestionOrderValue(question).label || "—");
+      const specialty = escapeHtml(question.specialty || "—");
+      const section = escapeHtml(question.section || "—");
+      const stemPreview = escapeHtml(question.stemPreview || "No stem available.");
+      const correctAnswer = escapeHtml(
+        truncateQuestionPreview(question.correctAnswer || "No correct answer recorded.", 90)
+      );
+      const difficulty = escapeHtml(question.difficulty || "Unspecified");
+      const editorStatus = escapeHtml(question.editorStatus || "Unspecified");
+      const lastReviewedAt = escapeHtml(formatQuestionListDate(question.lastReviewedAt));
+      const updatedAt = escapeHtml(formatQuestionListDate(question.updatedAt));
+      const objectId = escapeHtml(question.objectId || "");
+      const difficultyClass = getQuestionStatusClassName(question.difficulty, "question-difficulty");
+      const statusClass = getQuestionStatusClassName(question.editorStatus, "question-status");
+
+      return `
+        <div class="question-row" data-question-id="${objectId}" tabindex="0" role="link" aria-label="Open question ${questionNumberLabel}">
+          <span class="question-number">${questionNumberLabel}</span>
+          <span class="question-specialty">${specialty}</span>
+          <span class="question-section">${section}</span>
+          <span class="question-stem-preview" title="${stemPreview}">${stemPreview}</span>
+          <span class="question-correct-answer" title="${correctAnswer}">${correctAnswer}</span>
+          <span class="question-difficulty-badge ${difficultyClass}">${difficulty}</span>
+          <span class="question-status-badge ${statusClass}">${editorStatus}</span>
+          <span class="question-date">${lastReviewedAt}</span>
+          <span class="question-date">${updatedAt}</span>
+          <span class="question-actions-cell">
+            <button
+              type="button"
+              class="question-edit-button"
+              data-question-id="${objectId}"
+              aria-label="Edit question ${questionNumberLabel}"
+              title="Edit question"
+            >
+              ✎
+            </button>
+          </span>
+        </div>
+      `;
+    })
+    .join("");
+
+  updateQuestionListFooter(filteredQuestions.length, displayedQuestions.length);
+}
+
+async function fetchQuestions() {
+  const list = document.getElementById("questions-list");
+  if (!list) return;
+
+  list.innerHTML = '<div class="question-list-message">Loading questions...</div>';
+
+  if (typeof Parse === "undefined") {
+    list.innerHTML = '<div class="question-list-message error">Parse SDK is not available.</div>';
+    return;
+  }
+
+  try {
+    const Question = Parse.Object.extend("Question");
+    const questionObjects = [];
+    const batchSize = 200;
+    let skip = 0;
+
+    while (true) {
+      const query = new Parse.Query(Question);
+      query.limit(batchSize);
+      query.skip(skip);
+      query.descending("updatedAt");
+
+      const batch = await query.find();
+      questionObjects.push(...batch);
+
+      if (batch.length < batchSize) {
+        break;
+      }
+
+      skip += batchSize;
+    }
+
+    const correctAnswersById = await fetchCorrectAnswersByQuestionIds(
+      questionObjects.map((question) => question.id)
+    );
+
+    pageState.questionsData = questionObjects.map((question) =>
+      normalizeQuestionRecord(question, correctAnswersById)
+    );
+    pageState.questionsLoaded = true;
+    syncQuestionFilterOptions(pageState.questionsData);
+    renderQuestionRows();
+  } catch (error) {
+    console.error("Unable to load questions.", error);
+    list.innerHTML =
+      '<div class="question-list-message error">Unable to load questions right now.</div>';
+    updateQuestionListFooter(0, 0);
+  }
+}
+
 async function fetchInstitutions() {
   const list = document.getElementById("institutions-list");
   if (!list) return;
@@ -701,6 +1553,22 @@ async function fetchInstitutions() {
   } catch (error) {
     console.error("Unable to load institutions.", error);
     list.innerHTML = '<div class="institution-message error">Unable to load institutions right now.</div>';
+  }
+}
+
+async function fetchUsers() {
+  const list = document.getElementById("users-list");
+  if (!list) return;
+
+  list.innerHTML = '<div class="user-list-message">Loading users...</div>';
+
+  try {
+    const users = await window.back4app.runCloudFunction("listUsers");
+    renderUserRows(users);
+    pageState.usersLoaded = true;
+  } catch (error) {
+    console.error("Unable to load users.", error);
+    list.innerHTML = '<div class="user-list-message error">Unable to load users right now.</div>';
   }
 }
 
@@ -746,6 +1614,7 @@ function bindAddInstitutionPage() {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       setInstitutionFormNotice("", "success");
+      setInstitutionsFeedback("", "success");
 
       const payload = collectInstitutionFormPayload();
 
@@ -756,8 +1625,7 @@ function bindAddInstitutionPage() {
 
       try {
         await window.back4app.runCloudFunction("addInstitution", payload);
-        setInstitutionFormNotice("Institution added successfully.", "success");
-        setInstitutionsFeedback(`Added ${payload.name}.`, "success");
+        setInstitutionsFeedback(`${payload.name} added successfully.`, "success");
         pageState.institutionsLoaded = false;
         resetInstitutionForm();
       } catch (error) {
@@ -843,6 +1711,262 @@ function bindInstitutionsListPage() {
   fetchInstitutions();
 }
 
+function bindUsersListPage() {
+  const sortButton = document.getElementById("user-display-name-sort");
+  const list = document.getElementById("users-list");
+
+  setUsersFeedback("", "success");
+
+  if (sortButton) {
+    sortButton.addEventListener("click", () => {
+      pageState.userSortDirection = pageState.userSortDirection === "asc" ? "desc" : "asc";
+      renderUserRows(pageState.usersData);
+    });
+  }
+
+  if (list) {
+    list.addEventListener("click", (event) => {
+      const editButton = event.target.closest(".user-edit-button");
+      if (!editButton) return;
+
+      const userId = editButton.dataset.userId;
+      const user = pageState.usersById.get(userId);
+      const displayName = user?.displayName || "this user";
+      setUsersFeedback(`Edit user for ${displayName} is coming soon.`, "success");
+    });
+  }
+
+  fetchUsers();
+}
+
+function bindQuestionsListPage() {
+  const searchInput = document.getElementById("question-search");
+  const specialtyFilter = document.getElementById("question-specialty-filter");
+  const sectionFilter = document.getElementById("question-section-filter");
+  const statusFilter = document.getElementById("question-status-filter");
+  const difficultyFilter = document.getElementById("question-difficulty-filter");
+  const sortSelect = document.getElementById("question-sort");
+  const list = document.getElementById("questions-list");
+  const loadMoreButton = document.getElementById("questions-load-more");
+
+  setQuestionsFeedback("", "success");
+  pageState.questionVisibleCount = 100;
+
+  [searchInput, specialtyFilter, sectionFilter, statusFilter, difficultyFilter, sortSelect].forEach(
+    (element) => {
+      if (!element) return;
+
+      element.addEventListener("input", () => {
+        pageState.questionVisibleCount = 100;
+        renderQuestionRows();
+      });
+
+      element.addEventListener("change", () => {
+        pageState.questionVisibleCount = 100;
+        renderQuestionRows();
+      });
+    }
+  );
+
+  if (loadMoreButton) {
+    loadMoreButton.addEventListener("click", () => {
+      pageState.questionVisibleCount += 100;
+      renderQuestionRows();
+    });
+  }
+
+  if (list) {
+    list.addEventListener("click", (event) => {
+      const editButton = event.target.closest(".question-edit-button");
+      if (editButton) {
+        event.preventDefault();
+        navigateToQuestionEditor(editButton.dataset.questionId);
+        return;
+      }
+
+      const questionRow = event.target.closest(".question-row");
+      if (questionRow) {
+        navigateToQuestionEditor(questionRow.dataset.questionId);
+      }
+    });
+
+    list.addEventListener("keydown", (event) => {
+      const questionRow = event.target.closest(".question-row");
+      if (!questionRow) return;
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        navigateToQuestionEditor(questionRow.dataset.questionId);
+      }
+    });
+  }
+
+  fetchQuestions();
+}
+
+function bindQuestionsAddPage() {
+  const questionTypeSelect = document.getElementById("add-question-type");
+  const stemTextarea = document.getElementById("add-question-stem");
+  const addOptionButton = document.getElementById("add-question-option");
+  const shuffleButton = document.getElementById("shuffle-question-options");
+  const optionsList = document.getElementById("question-options-list");
+
+  setQuestionsFeedback("", "success");
+  initializeQuestionEditorState();
+  bindAutoResizingTextarea(stemTextarea);
+  renderQuestionOptionsEditor();
+
+  if (questionTypeSelect) {
+    questionTypeSelect.value = QUESTION_TYPE_MULTIPLE_CHOICE;
+    questionTypeSelect.addEventListener("change", (event) => {
+      const nextType = event.target.value;
+      if (
+        pageState.questionEditor &&
+        pageState.questionEditor.questionType !== nextType &&
+        questionEditorHasOptionContent() &&
+        !window.confirm("Changing question type will reset the current answer options. Continue?")
+      ) {
+        event.target.value = pageState.questionEditor.questionType;
+        return;
+      }
+
+      setQuestionEditorType(nextType);
+    });
+  }
+
+  if (addOptionButton) {
+    addOptionButton.addEventListener("click", () => {
+      if (
+        pageState.questionEditor.questionType !== QUESTION_TYPE_MULTIPLE_CHOICE ||
+        pageState.questionEditor.options.length >= 5
+      ) {
+        return;
+      }
+
+      pageState.questionEditor.options.push(createQuestionOption());
+      renderQuestionOptionsEditor();
+    });
+  }
+
+  if (shuffleButton) {
+    shuffleButton.addEventListener("click", shuffleQuestionOptions);
+  }
+
+  if (optionsList) {
+    optionsList.addEventListener("change", (event) => {
+      const correctInput = event.target.closest(".question-option-correct-input");
+      if (!correctInput) return;
+
+      pageState.questionEditor.options = pageState.questionEditor.options.map((option) => ({
+        ...option,
+        isCorrect: option.id === correctInput.dataset.optionId,
+      }));
+      renderQuestionOptionsEditor();
+    });
+
+    optionsList.addEventListener("input", (event) => {
+      const textInput = event.target.closest(".question-option-text");
+      if (!textInput) return;
+
+      const option = pageState.questionEditor.options.find(
+        (currentOption) => currentOption.id === textInput.dataset.optionId
+      );
+      if (!option) return;
+
+      option.text = textInput.value;
+      renderQuestionOptionValidation();
+    });
+
+    optionsList.addEventListener("click", (event) => {
+      const removeButton = event.target.closest(".question-option-remove");
+      if (!removeButton) return;
+      if (
+        pageState.questionEditor.questionType !== QUESTION_TYPE_MULTIPLE_CHOICE ||
+        pageState.questionEditor.options.length <= 3
+      ) {
+        return;
+      }
+
+      pageState.questionEditor.options = pageState.questionEditor.options.filter(
+        (option) => option.id !== removeButton.dataset.optionId
+      );
+      renderQuestionOptionsEditor();
+    });
+
+    optionsList.addEventListener("dragstart", (event) => {
+      const optionRow = event.target.closest(".question-option-row");
+      if (!optionRow || pageState.questionEditor.questionType !== QUESTION_TYPE_MULTIPLE_CHOICE) {
+        event.preventDefault();
+        return;
+      }
+
+      pageState.questionEditor.dragOptionId = optionRow.dataset.optionId;
+      optionRow.classList.add("is-dragging");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", optionRow.dataset.optionId);
+      }
+    });
+
+    optionsList.addEventListener("dragend", (event) => {
+      const optionRow = event.target.closest(".question-option-row");
+      if (optionRow) {
+        optionRow.classList.remove("is-dragging");
+      }
+      pageState.questionEditor.dragOptionId = "";
+      optionsList
+        .querySelectorAll(".question-option-row.is-drop-target")
+        .forEach((row) => row.classList.remove("is-drop-target"));
+    });
+
+    optionsList.addEventListener("dragover", (event) => {
+      const optionRow = event.target.closest(".question-option-row");
+      if (!optionRow || pageState.questionEditor.questionType !== QUESTION_TYPE_MULTIPLE_CHOICE) {
+        return;
+      }
+
+      event.preventDefault();
+      optionsList
+        .querySelectorAll(".question-option-row.is-drop-target")
+        .forEach((row) => row.classList.remove("is-drop-target"));
+      optionRow.classList.add("is-drop-target");
+    });
+
+    optionsList.addEventListener("dragleave", (event) => {
+      const optionRow = event.target.closest(".question-option-row");
+      if (optionRow) {
+        optionRow.classList.remove("is-drop-target");
+      }
+    });
+
+    optionsList.addEventListener("drop", (event) => {
+      const optionRow = event.target.closest(".question-option-row");
+      if (!optionRow || pageState.questionEditor.questionType !== QUESTION_TYPE_MULTIPLE_CHOICE) {
+        return;
+      }
+
+      event.preventDefault();
+      optionRow.classList.remove("is-drop-target");
+      moveQuestionOption(pageState.questionEditor.dragOptionId, optionRow.dataset.optionId);
+      pageState.questionEditor.dragOptionId = "";
+    });
+  }
+
+  window.back4app
+    .runCloudFunction("listSpecialties")
+    .then((specialties) => {
+      const activeSpecialties = (Array.isArray(specialties) ? specialties : []).filter(
+        (specialty) => specialty?.isActive !== false
+      );
+      renderQuestionAddSpecialtyOptions(activeSpecialties);
+    })
+    .catch((error) => {
+      console.error("Unable to load specialties for question authoring.", error);
+      renderQuestionAddSpecialtyOptions([]);
+      setQuestionsFeedback("Unable to load specialties right now. Please try again.", "error");
+    });
+}
+
 function bindInviteUserPage() {
   const form = document.getElementById("invite-user-form");
   const resetButton = document.getElementById("invite-user-reset");
@@ -905,6 +2029,18 @@ function bindInviteUserPage() {
 }
 
 function initializeSection(section) {
+  if (section === "questions-add") {
+    bindQuestionsAddPage();
+  }
+
+  if (section === "questions-list") {
+    bindQuestionsListPage();
+  }
+
+  if (section === "users-list") {
+    bindUsersListPage();
+  }
+
   if (section === "institutions-add") {
     bindAddInstitutionPage();
   }
