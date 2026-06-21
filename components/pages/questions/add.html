@@ -43,6 +43,25 @@
       </label>
     </div>
 
+    <div id="question-topic-create" class="question-topic-create" aria-hidden="true">
+      <div class="question-topic-create-copy">
+        <p class="question-topic-create-title">Need a new topic?</p>
+        <p class="question-topic-create-text">Add it for the selected specialty and use it immediately.</p>
+      </div>
+      <div class="question-topic-create-controls">
+        <input
+          id="add-question-topic-name"
+          name="newTopicName"
+          type="text"
+          placeholder="Enter a topic name"
+          disabled
+        />
+        <button type="button" id="add-question-topic-button" class="button button-secondary" disabled>
+          Add Topic
+        </button>
+      </div>
+    </div>
+
     <label class="invite-user-label" for="add-question-stem">
       Question Stem
       <textarea
@@ -88,6 +107,81 @@
       <div id="question-option-validation" class="question-option-validation hidden" role="status" aria-live="polite"></div>
 
       <div id="question-options-list" class="question-options-list"></div>
+    </section>
+
+    <div class="invite-user-grid">
+      <label class="invite-user-label" for="add-question-images">
+        Question Images
+        <input
+          id="add-question-images"
+          name="images"
+          type="file"
+          accept="image/*"
+          multiple
+        />
+      </label>
+
+      <label class="invite-user-label" for="add-question-videos">
+        Question Videos
+        <input
+          id="add-question-videos"
+          name="videos"
+          type="file"
+          accept="video/*"
+          multiple
+        />
+      </label>
+    </div>
+
+    <label class="invite-user-label" for="add-question-critique">
+      Critique
+      <textarea
+        id="add-question-critique"
+        name="critique"
+        rows="5"
+        placeholder="Enter critique notes here."
+      ></textarea>
+    </label>
+
+    <div class="invite-user-grid">
+      <label class="invite-user-label" for="add-question-critique-images">
+        Critique Images
+        <input
+          id="add-question-critique-images"
+          name="critiqueImages"
+          type="file"
+          accept="image/*"
+          multiple
+        />
+      </label>
+
+      <label class="invite-user-label" for="add-question-critique-videos">
+        Critique Videos
+        <input
+          id="add-question-critique-videos"
+          name="critiqueVideos"
+          type="file"
+          accept="video/*"
+          multiple
+        />
+      </label>
+    </div>
+
+    <section class="question-references-panel" aria-labelledby="question-references-title">
+      <div class="question-references-header">
+        <div>
+          <h4 id="question-references-title">References</h4>
+          <p class="question-references-help">Start with one reference and add more as needed.</p>
+        </div>
+      </div>
+
+      <div id="question-references-list" class="question-references-list"></div>
+
+      <div class="question-references-footer">
+        <button type="button" id="add-question-reference" class="button button-secondary">
+          Add Another Reference
+        </button>
+      </div>
     </section>
   </form>
 </section>

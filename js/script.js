@@ -641,6 +641,138 @@ function renderQuestionAddSpecialtyOptions(specialties) {
   ].join("");
 }
 
+function renderQuestionAddTopicOptions(topics, { placeholder = "Select a specialty first" } = {}) {
+  const select = document.getElementById("add-question-topic");
+  if (!select) return;
+
+  if (!Array.isArray(topics) || topics.length === 0) {
+    select.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>`;
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  select.innerHTML = [
+    '<option value="">Select a topic</option>',
+    ...topics.map((topic) => {
+      const label = topic.name || "Unnamed Topic";
+      return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
+    }),
+  ].join("");
+}
+
+function normalizeLookupText(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function findSpecialtyByName(name) {
+  const normalizedName = normalizeLookupText(name);
+  return (pageState.activeSpecialties || []).find(
+    (specialty) => normalizeLookupText(specialty?.name) === normalizedName
+  );
+}
+
+function setQuestionTopicCreatorState({ visible, enabled, submitting = false } = {}) {
+  const container = document.getElementById("question-topic-create");
+  const input = document.getElementById("add-question-topic-name");
+  const button = document.getElementById("add-question-topic-button");
+
+  if (!container || !input || !button) return;
+
+  container.classList.toggle("is-visible", Boolean(visible));
+  container.setAttribute("aria-hidden", String(!visible));
+  input.disabled = !enabled || submitting;
+  button.disabled = !enabled || submitting;
+  button.textContent = submitting ? "Adding..." : "Add Topic";
+}
+
+async function loadQuestionTopicsForSpecialty(specialtyObjectId) {
+  if (!specialtyObjectId) {
+    renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
+    return;
+  }
+
+  renderQuestionAddTopicOptions([], { placeholder: "Loading topics..." });
+
+  const selectedSpecialty = (pageState.activeSpecialties || []).find(
+    (specialty) => specialty?.objectId === specialtyObjectId
+  );
+
+  if (normalizeLookupText(selectedSpecialty?.name) === "adult cardiac surgery") {
+    const cardiothoracicSpecialty = findSpecialtyByName("Cardiothoracic Surgery");
+    const generalThoracicSpecialty = findSpecialtyByName("General Thoracic Surgery");
+
+    if (cardiothoracicSpecialty?.objectId) {
+      await window.back4app.runCloudFunction("syncSubsetTopics", {
+        targetSpecialtyObjectId: specialtyObjectId,
+        sourceSpecialtyObjectId: cardiothoracicSpecialty.objectId,
+        excludedSpecialtyObjectId: generalThoracicSpecialty?.objectId || "",
+      });
+    }
+  }
+
+  const topics = await window.back4app.runCloudFunction("listTopics", {
+    specialtyObjectId,
+  });
+  const matchingTopics = Array.isArray(topics) ? topics : [];
+
+  if (matchingTopics.length === 0) {
+    renderQuestionAddTopicOptions([], { placeholder: "No topics available for this specialty" });
+    return;
+  }
+
+  renderQuestionAddTopicOptions(matchingTopics);
+}
+
+async function addQuestionTopicForSelectedSpecialty() {
+  const specialtySelect = document.getElementById("add-question-specialty");
+  const topicSelect = document.getElementById("add-question-topic");
+  const topicInput = document.getElementById("add-question-topic-name");
+
+  const specialtyObjectId = specialtySelect?.value?.trim() || "";
+  const topicName = topicInput?.value?.trim() || "";
+
+  if (!specialtyObjectId) {
+    setQuestionsFeedback("Select a specialty before adding a topic.", "error");
+    return;
+  }
+
+  if (!topicName) {
+    setQuestionsFeedback("Topic name is required.", "error");
+    return;
+  }
+
+  setQuestionTopicCreatorState({ visible: true, enabled: true, submitting: true });
+  setQuestionsFeedback("", "success");
+
+  try {
+    const result = await window.back4app.runCloudFunction("addTopic", {
+      name: topicName,
+      specialtyObjectId,
+    });
+
+    await loadQuestionTopicsForSpecialty(specialtyObjectId);
+    if (topicSelect) {
+      topicSelect.value = result?.name || topicName;
+    }
+    if (topicInput) {
+      topicInput.value = "";
+    }
+
+    setQuestionsFeedback(
+      result?.created === false
+        ? `Topic ${result.name} already exists and is now selected.`
+        : `Added topic ${result?.name || topicName}.`,
+      "success"
+    );
+  } catch (error) {
+    console.error("Unable to add topic.", error);
+    setQuestionsFeedback(error?.message || "Unable to add topic right now. Please try again.", "error");
+  } finally {
+    setQuestionTopicCreatorState({ visible: true, enabled: true, submitting: false });
+  }
+}
+
 function bindAutoResizingTextarea(textarea) {
   if (!textarea) return;
 
@@ -668,6 +800,29 @@ function buildMultipleChoiceOptions(count = 5) {
   return Array.from({ length: count }, () => createQuestionOption());
 }
 
+function createQuestionReference(overrides = {}) {
+  const referenceId = `reference-${pageState.questionEditor.nextReferenceId++}`;
+  return {
+    id: referenceId,
+    parseInput: "",
+    parseError: "",
+    isParsing: false,
+    title: "",
+    authors: "",
+    journal: "",
+    year: "",
+    volume: "",
+    issue: "",
+    pages: "",
+    doi: "",
+    pmid: "",
+    url: "",
+    citationText: "",
+    note: "",
+    ...overrides,
+  };
+}
+
 function buildTrueFalseOptions() {
   return [
     createQuestionOption({ text: "True", locked: true }),
@@ -679,11 +834,177 @@ function initializeQuestionEditorState() {
   pageState.questionEditor = {
     questionType: QUESTION_TYPE_MULTIPLE_CHOICE,
     nextOptionId: 1,
+    nextReferenceId: 1,
     dragOptionId: "",
     options: [],
+    references: [],
   };
 
   pageState.questionEditor.options = buildMultipleChoiceOptions();
+  pageState.questionEditor.references = [createQuestionReference()];
+}
+
+function renderQuestionReferencesEditor() {
+  const list = document.getElementById("question-references-list");
+  if (!list || !pageState.questionEditor) return;
+
+  list.innerHTML = pageState.questionEditor.references
+    .map((reference, index) => {
+      const hasParseInput = String(reference.parseInput || "").trim().length > 0;
+      const removeButton =
+        pageState.questionEditor.references.length > 1
+          ? `<button
+              type="button"
+              class="button button-secondary question-reference-remove"
+              data-reference-id="${escapeHtml(reference.id)}"
+            >
+              Remove
+            </button>`
+          : "";
+
+      return `
+        <article class="question-reference-card" data-reference-id="${escapeHtml(reference.id)}">
+          <div class="question-reference-card-header">
+            <p class="question-reference-card-title">Reference ${index + 1}</p>
+            ${removeButton}
+          </div>
+          <div class="question-reference-parse-panel">
+            <div class="question-reference-parse-header">
+              <div>
+                <p class="question-reference-parse-title">Paste Formatted Reference</p>
+                <p class="question-reference-parse-help">Paste a formatted citation, PMID-style reference, DOI reference, or guideline citation. AI will fill the fields below for review, or you can enter the fields manually if you prefer.</p>
+              </div>
+              <button
+                type="button"
+                class="button ${
+                  hasParseInput ? "button-primary" : "button-secondary"
+                } question-reference-parse-button ${reference.isParsing ? "is-loading" : ""}"
+                data-reference-parse="${escapeHtml(reference.id)}"
+                ${reference.isParsing ? "disabled" : ""}
+              >
+                ${
+                  reference.isParsing
+                    ? '<span class="question-reference-parse-spinner" aria-hidden="true"></span><span>Parsing...</span>'
+                    : "Parse Reference"
+                }
+              </button>
+            </div>
+            <textarea
+              rows="3"
+              class="question-reference-parse-input"
+              data-reference-id="${escapeHtml(reference.id)}"
+              data-field="parseInput"
+              placeholder="Paste the full citation here."
+              ${reference.isParsing ? "disabled" : ""}
+            >${escapeHtml(reference.parseInput)}</textarea>
+            ${
+              reference.parseError
+                ? `<p class="question-reference-parse-error">${escapeHtml(reference.parseError)}</p>`
+                : ""
+            }
+          </div>
+          <div class="question-reference-grid">
+            <label class="question-reference-field span-8">
+              Title
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="title" value="${escapeHtml(reference.title)}" />
+            </label>
+            <label class="question-reference-field span-4">
+              PMID
+              <input type="text" inputmode="numeric" data-reference-id="${escapeHtml(reference.id)}" data-field="pmid" value="${escapeHtml(reference.pmid)}" />
+            </label>
+            <label class="question-reference-field span-8">
+              Authors
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="authors" value="${escapeHtml(reference.authors)}" />
+            </label>
+            <label class="question-reference-field span-4">
+              DOI
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="doi" value="${escapeHtml(reference.doi)}" />
+            </label>
+            <label class="question-reference-field span-6">
+              Journal
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="journal" value="${escapeHtml(reference.journal)}" />
+            </label>
+            <label class="question-reference-field span-6">
+              URL
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="url" value="${escapeHtml(reference.url)}" />
+            </label>
+            <label class="question-reference-field span-4">
+              Pages
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="pages" value="${escapeHtml(reference.pages)}" />
+            </label>
+            <label class="question-reference-field span-2">
+              Volume
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="volume" value="${escapeHtml(reference.volume)}" />
+            </label>
+            <label class="question-reference-field span-2">
+              Issue
+              <input type="text" data-reference-id="${escapeHtml(reference.id)}" data-field="issue" value="${escapeHtml(reference.issue)}" />
+            </label>
+            <label class="question-reference-field span-2">
+              Year
+              <input type="text" inputmode="numeric" data-reference-id="${escapeHtml(reference.id)}" data-field="year" value="${escapeHtml(reference.year)}" />
+            </label>
+            <label class="question-reference-field span-12">
+              Note
+              <textarea rows="2" data-reference-id="${escapeHtml(reference.id)}" data-field="note">${escapeHtml(reference.note)}</textarea>
+            </label>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  list.querySelectorAll("textarea").forEach((textarea) => bindAutoResizingTextarea(textarea));
+}
+
+async function parseQuestionReference(referenceId) {
+  if (!pageState.questionEditor) return;
+
+  const reference = pageState.questionEditor.references.find(
+    (currentReference) => currentReference.id === referenceId
+  );
+  if (!reference) return;
+
+  const citationText = String(reference.parseInput || "").trim();
+  if (!citationText) {
+    reference.parseError = "Paste a citation before parsing.";
+    renderQuestionReferencesEditor();
+    return;
+  }
+
+  reference.parseError = "";
+  reference.isParsing = true;
+  renderQuestionReferencesEditor();
+
+  try {
+    const parsedReference = await window.back4app.runCloudFunction("parseReferenceCitation", {
+      citationText,
+    });
+
+    reference.title = String(parsedReference?.title || "");
+    reference.authors = String(parsedReference?.authors || "");
+    reference.journal = String(parsedReference?.journal || "");
+    reference.year =
+      parsedReference?.year === null || parsedReference?.year === undefined
+        ? ""
+        : String(parsedReference.year);
+    reference.volume = String(parsedReference?.volume || "");
+    reference.issue = String(parsedReference?.issue || "");
+    reference.pages = String(parsedReference?.pages || "");
+    reference.pmid = String(parsedReference?.pmid || "");
+    reference.doi = String(parsedReference?.doi || "");
+    reference.url = String(parsedReference?.url || "");
+    reference.note = String(parsedReference?.note || "");
+    reference.citationText = String(parsedReference?.citationText || citationText);
+    reference.parseError = "";
+  } catch (error) {
+    console.error("Unable to parse reference citation.", error);
+    reference.parseError =
+      error?.message || "Unable to parse that citation right now. Please review it manually.";
+  } finally {
+    reference.isParsing = false;
+    renderQuestionReferencesEditor();
+  }
 }
 
 function getQuestionOptionLabel(index) {
@@ -1807,14 +2128,24 @@ function bindQuestionsListPage() {
 function bindQuestionsAddPage() {
   const questionTypeSelect = document.getElementById("add-question-type");
   const stemTextarea = document.getElementById("add-question-stem");
+  const critiqueTextarea = document.getElementById("add-question-critique");
   const addOptionButton = document.getElementById("add-question-option");
+  const addReferenceButton = document.getElementById("add-question-reference");
   const shuffleButton = document.getElementById("shuffle-question-options");
   const optionsList = document.getElementById("question-options-list");
+  const referencesList = document.getElementById("question-references-list");
+  const specialtySelect = document.getElementById("add-question-specialty");
+  const addTopicInput = document.getElementById("add-question-topic-name");
+  const addTopicButton = document.getElementById("add-question-topic-button");
 
   setQuestionsFeedback("", "success");
   initializeQuestionEditorState();
   bindAutoResizingTextarea(stemTextarea);
+  bindAutoResizingTextarea(critiqueTextarea);
   renderQuestionOptionsEditor();
+  renderQuestionReferencesEditor();
+  renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
+  setQuestionTopicCreatorState({ visible: false, enabled: false });
 
   if (questionTypeSelect) {
     questionTypeSelect.value = QUESTION_TYPE_MULTIPLE_CHOICE;
@@ -1850,6 +2181,13 @@ function bindQuestionsAddPage() {
 
   if (shuffleButton) {
     shuffleButton.addEventListener("click", shuffleQuestionOptions);
+  }
+
+  if (addReferenceButton) {
+    addReferenceButton.addEventListener("click", () => {
+      pageState.questionEditor.references.push(createQuestionReference());
+      renderQuestionReferencesEditor();
+    });
   }
 
   if (optionsList) {
@@ -1952,17 +2290,92 @@ function bindQuestionsAddPage() {
     });
   }
 
+  if (referencesList) {
+    referencesList.addEventListener("input", (event) => {
+      const field = event.target.closest("[data-reference-id][data-field]");
+      if (!field || !pageState.questionEditor) return;
+
+      const reference = pageState.questionEditor.references.find(
+        (currentReference) => currentReference.id === field.dataset.referenceId
+      );
+      if (!reference) return;
+
+      reference[field.dataset.field] = field.value;
+      if (field.dataset.field === "parseInput") {
+        reference.parseError = "";
+      }
+    });
+
+    referencesList.addEventListener("click", (event) => {
+      const removeButton = event.target.closest(".question-reference-remove");
+      if (removeButton && pageState.questionEditor) {
+        pageState.questionEditor.references = pageState.questionEditor.references.filter(
+          (reference) => reference.id !== removeButton.dataset.referenceId
+        );
+        renderQuestionReferencesEditor();
+        return;
+      }
+
+      const parseButton = event.target.closest("[data-reference-parse]");
+      if (!parseButton) return;
+
+      parseQuestionReference(parseButton.dataset.referenceParse);
+    });
+  }
+
+  if (specialtySelect) {
+    specialtySelect.addEventListener("change", async (event) => {
+      setQuestionsFeedback("", "success");
+      if (addTopicInput) {
+        addTopicInput.value = "";
+      }
+
+      try {
+        await loadQuestionTopicsForSpecialty(event.target.value);
+        setQuestionTopicCreatorState({
+          visible: Boolean(event.target.value),
+          enabled: Boolean(event.target.value),
+        });
+      } catch (error) {
+        console.error("Unable to load topics for the selected specialty.", error);
+        renderQuestionAddTopicOptions([], { placeholder: "Unable to load topics" });
+        setQuestionTopicCreatorState({
+          visible: Boolean(event.target.value),
+          enabled: Boolean(event.target.value),
+        });
+        setQuestionsFeedback("Unable to load topics right now. Please try again.", "error");
+      }
+    });
+  }
+
+  if (addTopicButton) {
+    addTopicButton.addEventListener("click", () => {
+      addQuestionTopicForSelectedSpecialty();
+    });
+  }
+
+  if (addTopicInput) {
+    addTopicInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      addQuestionTopicForSelectedSpecialty();
+    });
+  }
+
   window.back4app
     .runCloudFunction("listSpecialties")
     .then((specialties) => {
       const activeSpecialties = (Array.isArray(specialties) ? specialties : []).filter(
         (specialty) => specialty?.isActive !== false
       );
+      pageState.activeSpecialties = activeSpecialties;
       renderQuestionAddSpecialtyOptions(activeSpecialties);
+      renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
     })
     .catch((error) => {
       console.error("Unable to load specialties for question authoring.", error);
       renderQuestionAddSpecialtyOptions([]);
+      renderQuestionAddTopicOptions([], { placeholder: "Unable to load topics" });
       setQuestionsFeedback("Unable to load specialties right now. Please try again.", "error");
     });
 }
