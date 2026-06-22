@@ -40,6 +40,11 @@ const pageState = {
   activeSpecialties: [],
   activeStatuses: [],
   specialtiesLoaded: false,
+  questionAiMetadata: null,
+  questionGenerationState: {
+    status: "idle",
+    draft: null,
+  },
 };
 
 function getMainSection(section) {
@@ -122,6 +127,8 @@ function renderHeaderAuth() {
   if (logoutLink) {
     logoutLink.tabIndex = authState.loggedIn ? 0 : -1;
   }
+
+  renderNavAccess();
 }
 
 function setLoginNotice(message, type) {
@@ -228,6 +235,7 @@ function bindHeaderActions() {
 
         setLoginNotice(`Login successful. Welcome, ${authState.userName}.`, "success");
         renderHeaderAuth();
+        populateQuestionAuthorField();
         setTimeout(closeLoginOverlay, 800);
       } catch (error) {
         const message = error?.message || "Login failed. Please check your credentials.";
@@ -259,7 +267,14 @@ function bindHeaderActions() {
       event.preventDefault();
       authState.loggedIn = false;
       authState.userName = "Admin User";
+      if (typeof Parse !== "undefined" && typeof Parse.User?.logOut === "function") {
+        Parse.User.logOut().catch((error) => {
+          console.error("Unable to log out Parse user.", error);
+        });
+      }
       renderHeaderAuth();
+      populateQuestionAuthorField();
+      void navigateToSection(DEFAULT_SECTION);
     });
   }
 
@@ -276,6 +291,29 @@ function bindHeaderActions() {
 function getSectionFromHash() {
   const requestedSection = window.location.hash.replace(/^#/, "").trim().toLowerCase();
   return VALID_SECTIONS.has(requestedSection) ? requestedSection : DEFAULT_SECTION;
+}
+
+function canAccessSection(section) {
+  const normalizedSection = VALID_SECTIONS.has(section) ? section : DEFAULT_SECTION;
+  return authState.loggedIn || normalizedSection === DEFAULT_SECTION;
+}
+
+function getAccessibleSection(section) {
+  const normalizedSection = VALID_SECTIONS.has(section) ? section : DEFAULT_SECTION;
+  return canAccessSection(normalizedSection) ? normalizedSection : DEFAULT_SECTION;
+}
+
+function renderNavAccess() {
+  const navLinks = document.querySelectorAll(".nav-link, .sub-nav-link");
+
+  navLinks.forEach((link) => {
+    const section = link.dataset.section || "";
+    const isAccessible = canAccessSection(section);
+
+    link.classList.toggle("disabled", !isAccessible);
+    link.setAttribute("aria-disabled", String(!isAccessible));
+    link.tabIndex = isAccessible ? 0 : -1;
+  });
 }
 
 function setActiveNavLink(section) {
@@ -444,6 +482,195 @@ function formatUserDisplayName(user) {
   return credentials ? `${displayName}, ${credentials}` : displayName;
 }
 
+function getCurrentParseUserDisplayName() {
+  if (typeof Parse === "undefined" || typeof Parse.User?.current !== "function") {
+    return "";
+  }
+
+  const currentUser = Parse.User.current();
+  if (!currentUser) return "";
+
+  const displayName = String(
+    currentUser.get?.("displayName") ||
+      currentUser.attributes?.displayName ||
+      currentUser.get?.("username") ||
+      currentUser.getUsername?.() ||
+      ""
+  ).trim();
+  const credentials = String(
+    currentUser.get?.("credentials") || currentUser.attributes?.credentials || ""
+  ).trim();
+
+  return displayName && credentials ? `${displayName}, ${credentials}` : displayName;
+}
+
+function populateQuestionAuthorField() {
+  const authorInput = document.getElementById("add-question-author");
+  if (!authorInput) return;
+
+  authorInput.value = getCurrentParseUserDisplayName();
+}
+
+function setQuestionGenerationNotice(message, type) {
+  const notice = document.getElementById("question-generate-notice");
+  if (!notice) return;
+
+  if (!message) {
+    notice.innerHTML = "";
+    notice.classList.remove("is-visible", "error", "success", "loading");
+    return;
+  }
+
+  const variant = type === "success" ? "success" : type === "loading" ? "loading" : "error";
+  notice.classList.remove("error", "success", "loading");
+  notice.classList.add(variant);
+  notice.classList.add("is-visible");
+  notice.innerHTML =
+    variant === "loading"
+      ? '<span class="question-generate-inline-spinner" aria-hidden="true"></span><span>Generating question...</span>'
+      : `<span>${escapeHtml(message)}</span>`;
+}
+
+function setQuestionGenerationSubmitting(isSubmitting) {
+  const submitButton = document.getElementById("question-generate-submit");
+  const cancelButton = document.getElementById("question-generate-cancel-button");
+  const closeButton = document.getElementById("question-generate-cancel");
+  const sourceTextarea = document.getElementById("question-generate-source");
+  const notesTextarea = document.getElementById("question-generate-notes-input");
+  const hasMediaCheckbox = document.getElementById("question-generate-has-media");
+
+  if (submitButton) {
+    const generationStatus = pageState.questionGenerationState?.status || "idle";
+    submitButton.disabled = isSubmitting;
+    submitButton.textContent =
+      generationStatus === "ready"
+        ? "Accept Question"
+        : generationStatus === "error"
+          ? "Try Again"
+          : "Generate Question";
+  }
+
+  [cancelButton, closeButton, sourceTextarea, notesTextarea, hasMediaCheckbox].forEach((element) => {
+    if (element) {
+      element.disabled = isSubmitting;
+    }
+  });
+}
+
+function openQuestionGenerateOverlay() {
+  const overlay = document.getElementById("question-generate-overlay");
+  const sourceTextarea = document.getElementById("question-generate-source");
+  if (!overlay) return;
+
+  pageState.questionGenerationState = {
+    status: "idle",
+    draft: null,
+  };
+  setQuestionGenerationNotice("", "success");
+  setQuestionGenerationSubmitting(false);
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+
+  if (sourceTextarea) {
+    window.setTimeout(() => sourceTextarea.focus(), 0);
+  }
+}
+
+function closeQuestionGenerateOverlay({ clearInput = false } = {}) {
+  const overlay = document.getElementById("question-generate-overlay");
+  const form = document.getElementById("question-generate-form");
+  if (!overlay) return;
+
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  pageState.questionGenerationState = {
+    status: "idle",
+    draft: null,
+  };
+  setQuestionGenerationNotice("", "success");
+  setQuestionGenerationSubmitting(false);
+
+  if (clearInput && form) {
+    form.reset();
+  }
+}
+
+function questionEditorHasDraftContent() {
+  const stem = document.getElementById("add-question-stem")?.value.trim() || "";
+  const critique = document.getElementById("add-question-critique")?.value.trim() || "";
+  return Boolean(
+    stem ||
+      critique ||
+      questionEditorHasOptionContent() ||
+      collectQuestionReferencePayloads().length > 0
+  );
+}
+
+function applyGeneratedQuestionDraftToEditor(draft) {
+  const stemTextarea = document.getElementById("add-question-stem");
+  const critiqueTextarea = document.getElementById("add-question-critique");
+  const questionTypeSelect = document.getElementById("add-question-type");
+
+  if (!pageState.questionEditor) {
+    initializeQuestionEditorState();
+  }
+
+  if (stemTextarea) {
+    stemTextarea.value = String(draft?.stem || "");
+    bindAutoResizingTextarea(stemTextarea);
+  }
+
+  if (critiqueTextarea) {
+    critiqueTextarea.value = String(draft?.critique || "");
+    bindAutoResizingTextarea(critiqueTextarea);
+  }
+
+  if (questionTypeSelect) {
+    questionTypeSelect.value = QUESTION_TYPE_MULTIPLE_CHOICE;
+  }
+
+  pageState.questionEditor.questionType = QUESTION_TYPE_MULTIPLE_CHOICE;
+  pageState.questionEditor.options = (Array.isArray(draft?.options) ? draft.options : []).map((option) =>
+    createQuestionOption({
+      text: String(option?.text || ""),
+      isCorrect: Boolean(option?.isCorrect),
+      locked: false,
+    })
+  );
+  pageState.questionEditor.references = (Array.isArray(draft?.references) ? draft.references : []).map(
+    (reference) =>
+      createQuestionReference({
+        parseInput: String(reference?.citationText || ""),
+        title: String(reference?.title || ""),
+        authors: String(reference?.authors || ""),
+        journal: String(reference?.journal || ""),
+        year:
+          reference?.year === null || reference?.year === undefined ? "" : String(reference.year),
+        volume: String(reference?.volume || ""),
+        issue: String(reference?.issue || ""),
+        pages: String(reference?.pages || ""),
+        doi: String(reference?.doi || ""),
+        pmid: String(reference?.pmid || ""),
+        url: String(reference?.url || ""),
+        citationText: String(reference?.citationText || ""),
+        note: String(reference?.note || ""),
+      })
+  );
+
+  if (pageState.questionEditor.references.length === 0) {
+    pageState.questionEditor.references = [createQuestionReference()];
+  }
+
+  pageState.questionAiMetadata = {
+    generatedByAI: Boolean(draft?.generatedByAI),
+    aiModel: String(draft?.aiModel || ""),
+    aiPromptVersion: String(draft?.aiPromptVersion || ""),
+  };
+
+  renderQuestionOptionsEditor();
+  renderQuestionReferencesEditor();
+}
+
 function setQuestionsFeedback(message, type) {
   const feedback = document.getElementById("questions-feedback");
   if (!feedback) return;
@@ -458,6 +685,14 @@ function setQuestionsFeedback(message, type) {
   feedback.textContent = message;
   feedback.classList.remove("hidden", "success", "error");
   feedback.classList.add(type === "success" ? "success" : "error");
+}
+
+function setQuestionSaveSubmitting(isSubmitting) {
+  const button = document.getElementById("save-question-button");
+  if (!button) return;
+
+  button.disabled = isSubmitting;
+  button.textContent = isSubmitting ? "Saving..." : "Save Article";
 }
 
 function buildQuestionEditUrl(objectId) {
@@ -686,6 +921,12 @@ function applyQuestionStatusAccent(statusName) {
   }
 }
 
+function getSelectedOptionLabel(select) {
+  if (!select) return "";
+  const selectedOption = select.options[select.selectedIndex];
+  return selectedOption ? String(selectedOption.textContent || "").trim() : "";
+}
+
 function renderQuestionAddTopicOptions(topics, { placeholder = "Select a specialty first" } = {}) {
   const select = document.getElementById("add-question-topic");
   if (!select) return;
@@ -818,6 +1059,316 @@ async function addQuestionTopicForSelectedSpecialty() {
   }
 }
 
+function collectQuestionAddPayload() {
+  const specialtySelect = document.getElementById("add-question-specialty");
+  const topicSelect = document.getElementById("add-question-topic");
+  const statusSelect = document.getElementById("add-question-status");
+  const currentUserId =
+    typeof Parse !== "undefined" && typeof Parse.User?.current === "function"
+      ? Parse.User.current()?.id || ""
+      : "";
+
+  return {
+    stem: document.getElementById("add-question-stem")?.value.trim() || "",
+    critique: document.getElementById("add-question-critique")?.value.trim() || "",
+    specialty: getSelectedOptionLabel(specialtySelect),
+    topic: topicSelect?.value.trim() || "",
+    difficulty: document.getElementById("add-question-difficulty")?.value || "",
+    status: statusSelect?.value || "",
+    createdByObjectId: currentUserId,
+    lastEditedByObjectId: currentUserId,
+    lastEditedAt: new Date().toISOString(),
+    generatedByAI: Boolean(pageState.questionAiMetadata?.generatedByAI),
+    aiModel: String(pageState.questionAiMetadata?.aiModel || ""),
+    aiPromptVersion: String(pageState.questionAiMetadata?.aiPromptVersion || ""),
+  };
+}
+
+function validateQuestionAddPayload(payload) {
+  if (!payload.specialty) return "Specialty is required.";
+  if (!payload.topic) return "Topic is required.";
+  if (!payload.difficulty) return "Difficulty is required.";
+  if (!payload.status) return "Article Status is required.";
+  if (!payload.stem) return "Question Stem is required.";
+
+  const editor = pageState.questionEditor;
+  if (!editor) return "Question editor is not ready.";
+
+  const populatedOptions = editor.options.filter((option) => option.text.trim().length > 0);
+  const correctOptions = populatedOptions.filter((option) => option.isCorrect);
+
+  if (editor.questionType === QUESTION_TYPE_TRUE_FALSE) {
+    const values = editor.options.map((option) => option.text.trim());
+    if (values.length !== 2 || values[0] !== "True" || values[1] !== "False") {
+      return "True / False questions must contain exactly the options True and False.";
+    }
+  } else {
+    if (editor.options.length < 3) {
+      return "Multiple-choice questions must contain at least three answer options.";
+    }
+
+    if (populatedOptions.length < 3) {
+      return "Please enter at least three answer options before saving.";
+    }
+  }
+
+  if (correctOptions.length !== 1) {
+    return "Exactly one populated answer option must be marked correct.";
+  }
+
+  return "";
+}
+
+function collectQuestionOptionPayloads() {
+  if (!pageState.questionEditor) return [];
+
+  const relevantOptions =
+    pageState.questionEditor.questionType === QUESTION_TYPE_TRUE_FALSE
+      ? pageState.questionEditor.options
+      : pageState.questionEditor.options.filter((option) => option.text.trim().length > 0);
+
+  return relevantOptions.map((option, index) => ({
+    label: getQuestionOptionLabel(index),
+    text: option.text.trim(),
+    isCorrect: option.isCorrect,
+    sortOrder: index,
+  }));
+}
+
+function questionReferenceHasContent(reference) {
+  return [
+    reference.title,
+    reference.authors,
+    reference.journal,
+    reference.year,
+    reference.volume,
+    reference.issue,
+    reference.pages,
+    reference.doi,
+    reference.pmid,
+    reference.url,
+    reference.citationText,
+    reference.note,
+    reference.parseInput,
+  ].some((value) => String(value || "").trim().length > 0);
+}
+
+function collectQuestionReferencePayloads() {
+  if (!pageState.questionEditor) return [];
+
+  return pageState.questionEditor.references
+    .filter((reference) => questionReferenceHasContent(reference))
+    .map((reference, index) => {
+      const parsedYear = Number.parseInt(String(reference.year || "").trim(), 10);
+
+      return {
+        title: String(reference.title || "").trim(),
+        authors: String(reference.authors || "").trim(),
+        journal: String(reference.journal || "").trim(),
+        year: Number.isFinite(parsedYear) ? parsedYear : undefined,
+        volume: String(reference.volume || "").trim(),
+        issue: String(reference.issue || "").trim(),
+        pages: String(reference.pages || "").trim(),
+        doi: String(reference.doi || "").trim(),
+        pmid: String(reference.pmid || "").trim(),
+        url: String(reference.url || "").trim(),
+        citationText: String(reference.citationText || reference.parseInput || "").trim(),
+        note: String(reference.note || "").trim(),
+        sortOrder: index,
+        isPrimary: index === 0,
+      };
+    });
+}
+
+function getQuestionMediaGroups() {
+  return [
+    {
+      inputId: "add-question-images",
+      placement: "QUESTION",
+      mediaType: "IMAGE",
+    },
+    {
+      inputId: "add-question-videos",
+      placement: "QUESTION",
+      mediaType: "VIDEO",
+    },
+    {
+      inputId: "add-question-critique-images",
+      placement: "CRITIQUE",
+      mediaType: "IMAGE",
+    },
+    {
+      inputId: "add-question-critique-videos",
+      placement: "CRITIQUE",
+      mediaType: "VIDEO",
+    },
+  ];
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`Unable to read file ${file.name}.`));
+
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadQuestionMediaFiles(questionId) {
+  const uploadTasks = [];
+
+  getQuestionMediaGroups().forEach((group) => {
+    const input = document.getElementById(group.inputId);
+    const files = Array.from(input?.files || []);
+
+    files.forEach((file, index) => {
+      uploadTasks.push({
+        file,
+        placement: group.placement,
+        mediaType: group.mediaType,
+        sortOrder: index,
+      });
+    });
+  });
+
+  for (const task of uploadTasks) {
+    const base64Data = await readFileAsDataUrl(task.file);
+
+    await window.back4app.runCloudFunction("uploadQuestionMedia", {
+      questionId,
+      fileName: task.file.name,
+      contentType: task.file.type || (task.mediaType === "IMAGE" ? "image/*" : "video/*"),
+      base64Data,
+      placement: task.placement,
+      mediaType: task.mediaType,
+      sortOrder: task.sortOrder,
+    });
+  }
+}
+
+async function saveQuestionArticle() {
+  const payload = collectQuestionAddPayload();
+  const validationMessage = validateQuestionAddPayload(payload);
+
+  if (validationMessage) {
+    setQuestionsFeedback(validationMessage, "error");
+    return;
+  }
+
+  setQuestionsFeedback("", "success");
+  setQuestionSaveSubmitting(true);
+
+  let savedQuestion = null;
+
+  try {
+    savedQuestion = await window.back4app.runCloudFunction("addQuestion", payload);
+    const questionId = savedQuestion?.objectId;
+
+    const optionPayloads = collectQuestionOptionPayloads();
+    for (const optionPayload of optionPayloads) {
+      await window.back4app.runCloudFunction("addQuestionOption", {
+        questionObjectId: questionId,
+        ...optionPayload,
+      });
+    }
+
+    const referencePayloads = collectQuestionReferencePayloads();
+    for (const referencePayload of referencePayloads) {
+      const referenceResult = await window.back4app.runCloudFunction("addReference", referencePayload);
+      await window.back4app.runCloudFunction("addQuestionReference", {
+        questionObjectId: questionId,
+        referenceObjectId: referenceResult.objectId,
+        sortOrder: referencePayload.sortOrder,
+        isPrimary: referencePayload.isPrimary,
+        note: referencePayload.note,
+      });
+    }
+
+    await uploadQuestionMediaFiles(questionId);
+
+    setQuestionsFeedback("Article saved successfully.", "success");
+  } catch (error) {
+    console.error("Unable to save article.", error);
+    const message = savedQuestion?.objectId
+      ? error?.message || "The article was created, but some related content failed to save."
+      : error?.message || "Unable to save the article right now.";
+    setQuestionsFeedback(message, "error");
+  } finally {
+    setQuestionSaveSubmitting(false);
+  }
+}
+
+function collectQuestionGenerationPayload() {
+  const specialtySelect = document.getElementById("add-question-specialty");
+  const topicSelect = document.getElementById("add-question-topic");
+
+  return {
+    sourceText: document.getElementById("question-generate-source")?.value.trim() || "",
+    generatorNotes: document.getElementById("question-generate-notes-input")?.value.trim() || "",
+    specialty: getSelectedOptionLabel(specialtySelect),
+    topic: topicSelect?.value.trim() || "",
+    difficulty: document.getElementById("add-question-difficulty")?.value || "",
+    hasMedia: Boolean(document.getElementById("question-generate-has-media")?.checked),
+  };
+}
+
+async function generateAiQuestionDraft() {
+  if (pageState.questionGenerationState?.status === "ready" && pageState.questionGenerationState?.draft) {
+    applyGeneratedQuestionDraftToEditor(pageState.questionGenerationState.draft);
+    closeQuestionGenerateOverlay({ clearInput: true });
+    setQuestionsFeedback("AI draft added. Review and edit it before saving.", "success");
+    return;
+  }
+
+  const payload = collectQuestionGenerationPayload();
+  if (!payload.sourceText) {
+    setQuestionGenerationNotice("Question input is required.", "error");
+    pageState.questionGenerationState = {
+      status: "error",
+      draft: null,
+    };
+    setQuestionGenerationSubmitting(false);
+    return;
+  }
+
+  if (
+    questionEditorHasDraftContent() &&
+    !window.confirm("Generating a new AI draft will replace the current stem, options, critique, and references. Continue?")
+  ) {
+    return;
+  }
+
+  pageState.questionGenerationState = {
+    status: "loading",
+    draft: null,
+  };
+  setQuestionGenerationNotice("Generating question...", "loading");
+  setQuestionGenerationSubmitting(true);
+
+  try {
+    const generatedDraft = await window.back4app.runCloudFunction("generateQuestionDraft", payload);
+    pageState.questionGenerationState = {
+      status: "ready",
+      draft: generatedDraft || {},
+    };
+    setQuestionGenerationNotice("Question draft generated. Review it, then accept it.", "success");
+    setQuestionGenerationSubmitting(false);
+  } catch (error) {
+    console.error("Unable to generate AI question draft.", error);
+    pageState.questionGenerationState = {
+      status: "error",
+      draft: null,
+    };
+    setQuestionGenerationNotice(
+      error?.message || "Unable to generate an AI draft right now. Please try again.",
+      "error"
+    );
+    setQuestionGenerationSubmitting(false);
+  }
+}
+
 function bindAutoResizingTextarea(textarea) {
   if (!textarea) return;
 
@@ -876,6 +1427,7 @@ function buildTrueFalseOptions() {
 }
 
 function initializeQuestionEditorState() {
+  pageState.questionAiMetadata = null;
   pageState.questionEditor = {
     questionType: QUESTION_TYPE_MULTIPLE_CHOICE,
     nextOptionId: 1,
@@ -2184,15 +2736,23 @@ function bindQuestionsAddPage() {
   const addTopicInput = document.getElementById("add-question-topic-name");
   const addTopicButton = document.getElementById("add-question-topic-button");
   const statusSelect = document.getElementById("add-question-status");
+  const importQuestionButton = document.getElementById("import-question-button");
+  const generateOverlay = document.getElementById("question-generate-overlay");
+  const generateForm = document.getElementById("question-generate-form");
+  const generateCancelButton = document.getElementById("question-generate-cancel-button");
+  const generateCloseButton = document.getElementById("question-generate-cancel");
+  const generateSourceTextarea = document.getElementById("question-generate-source");
 
   setQuestionsFeedback("", "success");
   initializeQuestionEditorState();
   bindAutoResizingTextarea(stemTextarea);
   bindAutoResizingTextarea(critiqueTextarea);
+  bindAutoResizingTextarea(generateSourceTextarea);
   renderQuestionOptionsEditor();
   renderQuestionReferencesEditor();
   renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
   setQuestionTopicCreatorState({ visible: false, enabled: false });
+  populateQuestionAuthorField();
 
   if (questionTypeSelect) {
     questionTypeSelect.value = QUESTION_TYPE_MULTIPLE_CHOICE;
@@ -2239,7 +2799,40 @@ function bindQuestionsAddPage() {
 
   if (saveQuestionButton) {
     saveQuestionButton.addEventListener("click", () => {
-      setQuestionsFeedback("Save Article is not connected yet.", "success");
+      void saveQuestionArticle();
+    });
+  }
+
+  if (importQuestionButton) {
+    importQuestionButton.addEventListener("click", () => {
+      openQuestionGenerateOverlay();
+    });
+  }
+
+  if (generateCancelButton) {
+    generateCancelButton.addEventListener("click", () => {
+      closeQuestionGenerateOverlay();
+    });
+  }
+
+  if (generateCloseButton) {
+    generateCloseButton.addEventListener("click", () => {
+      closeQuestionGenerateOverlay();
+    });
+  }
+
+  if (generateOverlay) {
+    generateOverlay.addEventListener("click", (event) => {
+      if (event.target === generateOverlay) {
+        closeQuestionGenerateOverlay();
+      }
+    });
+  }
+
+  if (generateForm) {
+    generateForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await generateAiQuestionDraft();
     });
   }
 
@@ -2562,7 +3155,7 @@ async function loadPageContent(section) {
 }
 
 async function navigateToSection(section, { updateHash = true } = {}) {
-  const normalizedSection = VALID_SECTIONS.has(section) ? section : DEFAULT_SECTION;
+  const normalizedSection = getAccessibleSection(section);
 
   setActiveNavLink(normalizedSection);
   await loadPageContent(normalizedSection);
@@ -2596,6 +3189,7 @@ function bindNavLinks() {
 
       const section = link.dataset.section;
       if (!section) return;
+      if (!canAccessSection(section)) return;
 
       const parentNavItem = link.closest(".nav-item-has-submenu");
 
@@ -2637,6 +3231,7 @@ async function loadPageComponents() {
   renderHeaderAuth();
   bindHeaderActions();
   bindNavLinks();
+  renderNavAccess();
   await navigateToSection(getSectionFromHash(), { updateHash: false });
 }
 
