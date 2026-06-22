@@ -970,6 +970,11 @@ body {
   padding: 28px;
 }
 
+#question-add-card {
+  border-left: 6px solid transparent;
+  transition: border-left-color 180ms ease;
+}
+
 .invite-success-card {
   margin-top: 20px;
   background:
@@ -1018,6 +1023,12 @@ body {
 .question-setup-grid {
   grid-template-columns: repeat(3, minmax(0, 240px));
   justify-content: start;
+}
+
+.question-meta-grid {
+  grid-template-columns: minmax(280px, 420px) minmax(220px, 280px);
+  justify-content: start;
+  margin-bottom: 18px;
 }
 
 .question-editor-row {
@@ -1485,6 +1496,12 @@ body {
   grid-column: span 2;
 }
 
+.question-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
 .question-option-row {
   display: grid;
   grid-template-columns: 48px 42px 110px minmax(0, 1fr) 96px;
@@ -1863,6 +1880,7 @@ body {
   .question-options-actions .button,
   .question-references-header .button,
   .question-references-footer .button,
+  .question-form-footer .button,
   .invite-user-button-group .button,
   .institution-form-actions .button,
   .login-actions .button {

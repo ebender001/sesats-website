@@ -38,6 +38,7 @@ const pageState = {
   questionEditor: null,
   activeInstitutions: [],
   activeSpecialties: [],
+  activeStatuses: [],
   specialtiesLoaded: false,
 };
 
@@ -639,6 +640,50 @@ function renderQuestionAddSpecialtyOptions(specialties) {
       return `<option value="${escapeHtml(specialty.objectId || "")}">${escapeHtml(label)}</option>`;
     }),
   ].join("");
+}
+
+function renderQuestionAddStatusOptions(statuses) {
+  const select = document.getElementById("add-question-status");
+  if (!select) return;
+
+  if (!Array.isArray(statuses) || statuses.length === 0) {
+    select.innerHTML = '<option value="">No active statuses available</option>';
+    select.disabled = true;
+    return;
+  }
+
+  const draftStatus = statuses.find(
+    (status) => normalizeLookupText(status?.name) === "draft"
+  );
+
+  select.disabled = false;
+  select.innerHTML = statuses
+    .map((status) => {
+      const name = status.name || "Unnamed Status";
+      const isSelected = draftStatus?.objectId === status.objectId;
+      return `<option value="${escapeHtml(name)}"${isSelected ? " selected" : ""}>${escapeHtml(
+        name
+      )}</option>`;
+    })
+    .join("");
+}
+
+function applyQuestionStatusAccent(statusName) {
+  const card = document.getElementById("question-add-card");
+  const select = document.getElementById("add-question-status");
+  if (!card) return;
+
+  const selectedStatus = (pageState.activeStatuses || []).find(
+    (status) => normalizeLookupText(status?.name) === normalizeLookupText(statusName)
+  );
+
+  const accentColor = selectedStatus?.color || "transparent";
+  card.style.borderLeftColor = accentColor;
+  if (select) {
+    select.style.borderColor = accentColor;
+    select.style.backgroundColor =
+      accentColor && accentColor !== "transparent" ? `${accentColor}14` : "";
+  }
 }
 
 function renderQuestionAddTopicOptions(topics, { placeholder = "Select a specialty first" } = {}) {
@@ -2131,12 +2176,14 @@ function bindQuestionsAddPage() {
   const critiqueTextarea = document.getElementById("add-question-critique");
   const addOptionButton = document.getElementById("add-question-option");
   const addReferenceButton = document.getElementById("add-question-reference");
+  const saveQuestionButton = document.getElementById("save-question-button");
   const shuffleButton = document.getElementById("shuffle-question-options");
   const optionsList = document.getElementById("question-options-list");
   const referencesList = document.getElementById("question-references-list");
   const specialtySelect = document.getElementById("add-question-specialty");
   const addTopicInput = document.getElementById("add-question-topic-name");
   const addTopicButton = document.getElementById("add-question-topic-button");
+  const statusSelect = document.getElementById("add-question-status");
 
   setQuestionsFeedback("", "success");
   initializeQuestionEditorState();
@@ -2187,6 +2234,12 @@ function bindQuestionsAddPage() {
     addReferenceButton.addEventListener("click", () => {
       pageState.questionEditor.references.push(createQuestionReference());
       renderQuestionReferencesEditor();
+    });
+  }
+
+  if (saveQuestionButton) {
+    saveQuestionButton.addEventListener("click", () => {
+      setQuestionsFeedback("Save Article is not connected yet.", "success");
     });
   }
 
@@ -2348,6 +2401,12 @@ function bindQuestionsAddPage() {
     });
   }
 
+  if (statusSelect) {
+    statusSelect.addEventListener("change", (event) => {
+      applyQuestionStatusAccent(event.target.value);
+    });
+  }
+
   if (addTopicButton) {
     addTopicButton.addEventListener("click", () => {
       addQuestionTopicForSelectedSpecialty();
@@ -2377,6 +2436,22 @@ function bindQuestionsAddPage() {
       renderQuestionAddSpecialtyOptions([]);
       renderQuestionAddTopicOptions([], { placeholder: "Unable to load topics" });
       setQuestionsFeedback("Unable to load specialties right now. Please try again.", "error");
+    });
+
+  window.back4app
+    .runCloudFunction("listStatuses")
+    .then((statuses) => {
+      const activeStatuses = (Array.isArray(statuses) ? statuses : []).filter(
+        (status) => status?.isActive !== false
+      );
+      pageState.activeStatuses = activeStatuses;
+      renderQuestionAddStatusOptions(activeStatuses);
+      applyQuestionStatusAccent(document.getElementById("add-question-status")?.value || "");
+    })
+    .catch((error) => {
+      console.error("Unable to load statuses for question authoring.", error);
+      renderQuestionAddStatusOptions([]);
+      setQuestionsFeedback("Unable to load article statuses right now. Please try again.", "error");
     });
 }
 

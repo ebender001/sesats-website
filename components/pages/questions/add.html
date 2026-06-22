@@ -2,7 +2,7 @@
   <h2>Add New Question</h2>
 </section>
 
-<section class="invite-user-card">
+<section id="question-add-card" class="invite-user-card">
   <div class="question-form-header">
     <div class="invite-user-intro">
       <p class="invite-user-eyebrow">ABTS SESATS Administration</p>
@@ -18,6 +18,27 @@
   <div id="questions-feedback" class="question-list-message hidden" role="status" aria-live="polite"></div>
 
   <form id="add-question-form" class="invite-user-form">
+    <div class="invite-user-grid question-meta-grid">
+      <label class="invite-user-label" for="add-question-author">
+        Author
+        <input
+          id="add-question-author"
+          name="authorDisplayName"
+          type="text"
+          value=""
+          placeholder="Will populate from logged in user"
+          readonly
+        />
+      </label>
+
+      <label class="invite-user-label" for="add-question-status">
+        Article Status
+        <select id="add-question-status" name="status" required disabled>
+          <option value="">Loading statuses...</option>
+        </select>
+      </label>
+    </div>
+
     <div class="invite-user-grid question-setup-grid">
       <label class="invite-user-label" for="add-question-specialty">
         Specialty
@@ -183,5 +204,11 @@
         </button>
       </div>
     </section>
+
+    <div class="question-form-footer">
+      <button type="button" id="save-question-button" class="button button-primary">
+        Save Article
+      </button>
+    </div>
   </form>
 </section>
