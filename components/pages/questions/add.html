@@ -133,24 +133,38 @@
     <div class="invite-user-grid">
       <label class="invite-user-label" for="add-question-images">
         Question Images
-        <input
-          id="add-question-images"
-          name="images"
-          type="file"
-          accept="image/*"
-          multiple
-        />
+        <div class="question-media-picker">
+          <input
+            id="add-question-images"
+            class="question-media-input-hidden"
+            name="images"
+            type="file"
+            accept="image/*"
+            multiple
+          />
+          <button type="button" class="button button-secondary question-media-picker-button" data-file-input="add-question-images">
+            Choose Files
+          </button>
+          <div id="add-question-images-list" class="question-media-selection-list" aria-live="polite"></div>
+        </div>
       </label>
 
       <label class="invite-user-label" for="add-question-videos">
         Question Videos
-        <input
-          id="add-question-videos"
-          name="videos"
-          type="file"
-          accept="video/*"
-          multiple
-        />
+        <div class="question-media-picker">
+          <input
+            id="add-question-videos"
+            class="question-media-input-hidden"
+            name="videos"
+            type="file"
+            accept="video/*"
+            multiple
+          />
+          <button type="button" class="button button-secondary question-media-picker-button" data-file-input="add-question-videos">
+            Choose Files
+          </button>
+          <div id="add-question-videos-list" class="question-media-selection-list" aria-live="polite"></div>
+        </div>
       </label>
     </div>
 
@@ -167,24 +181,38 @@
     <div class="invite-user-grid">
       <label class="invite-user-label" for="add-question-critique-images">
         Critique Images
-        <input
-          id="add-question-critique-images"
-          name="critiqueImages"
-          type="file"
-          accept="image/*"
-          multiple
-        />
+        <div class="question-media-picker">
+          <input
+            id="add-question-critique-images"
+            class="question-media-input-hidden"
+            name="critiqueImages"
+            type="file"
+            accept="image/*"
+            multiple
+          />
+          <button type="button" class="button button-secondary question-media-picker-button" data-file-input="add-question-critique-images">
+            Choose Files
+          </button>
+          <div id="add-question-critique-images-list" class="question-media-selection-list" aria-live="polite"></div>
+        </div>
       </label>
 
       <label class="invite-user-label" for="add-question-critique-videos">
         Critique Videos
-        <input
-          id="add-question-critique-videos"
-          name="critiqueVideos"
-          type="file"
-          accept="video/*"
-          multiple
-        />
+        <div class="question-media-picker">
+          <input
+            id="add-question-critique-videos"
+            class="question-media-input-hidden"
+            name="critiqueVideos"
+            type="file"
+            accept="video/*"
+            multiple
+          />
+          <button type="button" class="button button-secondary question-media-picker-button" data-file-input="add-question-critique-videos">
+            Choose Files
+          </button>
+          <div id="add-question-critique-videos-list" class="question-media-selection-list" aria-live="polite"></div>
+        </div>
       </label>
     </div>
 

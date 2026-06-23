@@ -45,6 +45,7 @@ const pageState = {
     status: "idle",
     draft: null,
   },
+  questionMediaSelections: {},
 };
 
 function getMainSection(section) {
@@ -707,11 +708,18 @@ function formatQuestionListDate(value) {
     return "Not set";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   }).format(date);
+
+  const formattedTime = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+
+  return `${formattedDate}\n${formattedTime}`;
 }
 
 function truncateQuestionPreview(value, maxLength = 140) {
@@ -757,67 +765,38 @@ function getQuestionStatusClassName(value, prefix) {
   return normalized ? `${prefix}-${normalized}` : `${prefix}-default`;
 }
 
-async function fetchCorrectAnswersByQuestionIds(questionIds) {
-  if (!Array.isArray(questionIds) || questionIds.length === 0 || typeof Parse === "undefined") {
-    return new Map();
-  }
-
-  const Question = Parse.Object.extend("Question");
-  const QuestionOption = Parse.Object.extend("QuestionOption");
-  const questionPointers = questionIds.map((questionId) => {
-    const question = new Question();
-    question.id = questionId;
-    return question;
-  });
-
-  const answersById = new Map();
-  const chunkSize = 200;
-
-  for (let index = 0; index < questionPointers.length; index += chunkSize) {
-    const query = new Parse.Query(QuestionOption);
-    query.containedIn("question", questionPointers.slice(index, index + chunkSize));
-    query.equalTo("isCorrect", true);
-    query.ascending("sortOrder");
-    query.ascending("label");
-    query.limit(1000);
-
-    const options = await query.find();
-
-    options.forEach((option) => {
-      const questionId = option.get("question")?.id;
-      if (!questionId || answersById.has(questionId)) return;
-
-      const label = String(option.get("label") || "").trim();
-      const text = String(option.get("text") || "").trim();
-      answersById.set(questionId, [label, text].filter(Boolean).join(". "));
-    });
-  }
-
-  return answersById;
-}
-
-function normalizeQuestionRecord(question, correctAnswersById) {
-  const questionNumberValue = question.get("questionNumber");
-  const displayOrderValue = question.get("displayOrder");
-  const sectionValue = question.get("section") || question.get("topic") || "";
-  const stemValue = question.get("questionText") || question.get("stem") || "";
-  const editorStatusValue = question.get("editorStatus") || question.get("status") || "";
-  const lastReviewedValue = question.get("lastReviewedAt") || question.get("approvedAt") || null;
+function normalizeQuestionRecord(question) {
+  const safeQuestion = question && typeof question === "object" ? question : {};
+  const correctOption = Array.isArray(safeQuestion.questionOptions)
+    ? safeQuestion.questionOptions.find((option) => option?.isCorrect)
+    : null;
+  const questionNumberValue = safeQuestion.questionNumber;
+  const displayOrderValue = safeQuestion.displayOrder;
+  const sectionValue = safeQuestion.section || safeQuestion.topic || "";
+  const stemValue = safeQuestion.questionText || safeQuestion.stem || "";
+  const editorStatusValue = safeQuestion.editorStatus || safeQuestion.status || "";
+  const createdAtValue = safeQuestion.createdAt || "";
+  const lastReviewedValue = safeQuestion.lastReviewedAt || safeQuestion.approvedAt || "";
+  const updatedAtValue = safeQuestion.updatedAt || "";
 
   return {
-    objectId: question.id,
+    objectId: safeQuestion.objectId || "",
     questionNumber: questionNumberValue ?? displayOrderValue ?? "",
     displayOrder: displayOrderValue ?? questionNumberValue ?? "",
-    specialty: question.get("specialty") || "",
+    specialty: safeQuestion.specialty || "",
     section: sectionValue,
     questionText: stemValue,
     stemPreview: truncateQuestionPreview(stemValue, 140),
-    correctAnswer:
-      correctAnswersById.get(question.id) || String(question.get("correctAnswer") || "").trim(),
-    difficulty: question.get("difficulty") || "",
+    correctAnswer: correctOption
+      ? [String(correctOption.label || "").trim(), String(correctOption.text || "").trim()]
+          .filter(Boolean)
+          .join(". ")
+      : String(safeQuestion.correctAnswer || "").trim(),
+    difficulty: safeQuestion.difficulty || "",
     editorStatus: editorStatusValue,
-    updatedAt: question.updatedAt ? question.updatedAt.toISOString() : "",
-    lastReviewedAt: lastReviewedValue instanceof Date ? lastReviewedValue.toISOString() : "",
+    createdAt: typeof createdAtValue === "string" ? createdAtValue : "",
+    updatedAt: typeof updatedAtValue === "string" ? updatedAtValue : "",
+    lastReviewedAt: typeof lastReviewedValue === "string" ? lastReviewedValue : "",
   };
 }
 
@@ -1184,25 +1163,109 @@ function getQuestionMediaGroups() {
   return [
     {
       inputId: "add-question-images",
+      listId: "add-question-images-list",
       placement: "QUESTION",
       mediaType: "IMAGE",
     },
     {
       inputId: "add-question-videos",
+      listId: "add-question-videos-list",
       placement: "QUESTION",
       mediaType: "VIDEO",
     },
     {
       inputId: "add-question-critique-images",
+      listId: "add-question-critique-images-list",
       placement: "CRITIQUE",
       mediaType: "IMAGE",
     },
     {
       inputId: "add-question-critique-videos",
+      listId: "add-question-critique-videos-list",
       placement: "CRITIQUE",
       mediaType: "VIDEO",
     },
   ];
+}
+
+function buildQuestionMediaFileId(file) {
+  return [
+    String(file?.name || ""),
+    String(file?.size || 0),
+    String(file?.lastModified || 0),
+    String(file?.type || ""),
+  ].join("::");
+}
+
+function initializeQuestionMediaSelections() {
+  pageState.questionMediaSelections = {};
+  getQuestionMediaGroups().forEach((group) => {
+    pageState.questionMediaSelections[group.inputId] = [];
+  });
+}
+
+function renderQuestionMediaSelections() {
+  getQuestionMediaGroups().forEach((group) => {
+    const list = document.getElementById(group.listId);
+    if (!list) return;
+
+    const files = Array.isArray(pageState.questionMediaSelections?.[group.inputId])
+      ? pageState.questionMediaSelections[group.inputId]
+      : [];
+
+    list.innerHTML = files
+      .map(
+        (entry) => `
+          <span class="question-media-chip">
+            <span class="question-media-chip-name" title="${escapeHtml(entry.file.name)}">${escapeHtml(
+              entry.file.name
+            )}</span>
+            <button
+              type="button"
+              class="question-media-chip-remove"
+              data-input-id="${escapeHtml(group.inputId)}"
+              data-file-id="${escapeHtml(entry.id)}"
+              aria-label="Remove ${escapeHtml(entry.file.name)}"
+              title="Remove file"
+            >
+              ×
+            </button>
+          </span>
+        `
+      )
+      .join("");
+  });
+}
+
+function appendQuestionMediaSelections(inputId, files) {
+  if (!pageState.questionMediaSelections?.[inputId]) {
+    pageState.questionMediaSelections[inputId] = [];
+  }
+
+  const existingEntries = pageState.questionMediaSelections[inputId];
+  const existingIds = new Set(existingEntries.map((entry) => entry.id));
+
+  Array.from(files || []).forEach((file) => {
+    const fileId = buildQuestionMediaFileId(file);
+    if (existingIds.has(fileId)) return;
+
+    existingEntries.push({
+      id: fileId,
+      file,
+    });
+    existingIds.add(fileId);
+  });
+
+  renderQuestionMediaSelections();
+}
+
+function removeQuestionMediaSelection(inputId, fileId) {
+  if (!pageState.questionMediaSelections?.[inputId]) return;
+
+  pageState.questionMediaSelections[inputId] = pageState.questionMediaSelections[inputId].filter(
+    (entry) => entry.id !== fileId
+  );
+  renderQuestionMediaSelections();
 }
 
 function readFileAsDataUrl(file) {
@@ -1220,8 +1283,9 @@ async function uploadQuestionMediaFiles(questionId) {
   const uploadTasks = [];
 
   getQuestionMediaGroups().forEach((group) => {
-    const input = document.getElementById(group.inputId);
-    const files = Array.from(input?.files || []);
+    const files = Array.isArray(pageState.questionMediaSelections?.[group.inputId])
+      ? pageState.questionMediaSelections[group.inputId].map((entry) => entry.file)
+      : [];
 
     files.forEach((file, index) => {
       uploadTasks.push({
@@ -1248,9 +1312,32 @@ async function uploadQuestionMediaFiles(questionId) {
   }
 }
 
+async function collectQuestionMediaPayloads() {
+  const mediaPayloads = [];
+
+  for (const group of getQuestionMediaGroups()) {
+    const files = Array.isArray(pageState.questionMediaSelections?.[group.inputId])
+      ? pageState.questionMediaSelections[group.inputId].map((entry) => entry.file)
+      : [];
+
+    for (const [index, file] of files.entries()) {
+      mediaPayloads.push({
+        fileName: file.name,
+        contentType: file.type || (group.mediaType === "IMAGE" ? "image/*" : "video/*"),
+        base64Data: await readFileAsDataUrl(file),
+        placement: group.placement,
+        mediaType: group.mediaType,
+        sortOrder: index,
+      });
+    }
+  }
+
+  return mediaPayloads;
+}
+
 async function saveQuestionArticle() {
-  const payload = collectQuestionAddPayload();
-  const validationMessage = validateQuestionAddPayload(payload);
+  const questionPayload = collectQuestionAddPayload();
+  const validationMessage = validateQuestionAddPayload(questionPayload);
 
   if (validationMessage) {
     setQuestionsFeedback(validationMessage, "error");
@@ -1260,40 +1347,29 @@ async function saveQuestionArticle() {
   setQuestionsFeedback("", "success");
   setQuestionSaveSubmitting(true);
 
-  let savedQuestion = null;
-
   try {
-    savedQuestion = await window.back4app.runCloudFunction("addQuestion", payload);
-    const questionId = savedQuestion?.objectId;
-
     const optionPayloads = collectQuestionOptionPayloads();
-    for (const optionPayload of optionPayloads) {
-      await window.back4app.runCloudFunction("addQuestionOption", {
-        questionObjectId: questionId,
-        ...optionPayload,
-      });
-    }
-
     const referencePayloads = collectQuestionReferencePayloads();
-    for (const referencePayload of referencePayloads) {
-      const referenceResult = await window.back4app.runCloudFunction("addReference", referencePayload);
-      await window.back4app.runCloudFunction("addQuestionReference", {
-        questionObjectId: questionId,
-        referenceObjectId: referenceResult.objectId,
-        sortOrder: referencePayload.sortOrder,
-        isPrimary: referencePayload.isPrimary,
-        note: referencePayload.note,
-      });
-    }
+    const mediaPayloads = await collectQuestionMediaPayloads();
 
-    await uploadQuestionMediaFiles(questionId);
+    await window.back4app.runCloudFunction("saveQuestionBundle", {
+      question: questionPayload,
+      options: optionPayloads,
+      references: referencePayloads,
+      media: mediaPayloads,
+      editHistory: {
+        previousStatus: "",
+        newStatus: questionPayload.status,
+        changeSummary: questionPayload.generatedByAI
+          ? "Initial AI-assisted article draft created."
+          : "Initial article draft created.",
+      },
+    });
 
     setQuestionsFeedback("Article saved successfully.", "success");
   } catch (error) {
     console.error("Unable to save article.", error);
-    const message = savedQuestion?.objectId
-      ? error?.message || "The article was created, but some related content failed to save."
-      : error?.message || "Unable to save the article right now.";
+    const message = error?.message || "Unable to save the article right now.";
     setQuestionsFeedback(message, "error");
   } finally {
     setQuestionSaveSubmitting(false);
@@ -2359,13 +2435,10 @@ function renderQuestionRows() {
 
   list.innerHTML = displayedQuestions
     .map((question) => {
-      const questionNumberLabel = escapeHtml(getQuestionOrderValue(question).label || "—");
+      const createdAt = escapeHtml(formatQuestionListDate(question.createdAt));
       const specialty = escapeHtml(question.specialty || "—");
       const section = escapeHtml(question.section || "—");
       const stemPreview = escapeHtml(question.stemPreview || "No stem available.");
-      const correctAnswer = escapeHtml(
-        truncateQuestionPreview(question.correctAnswer || "No correct answer recorded.", 90)
-      );
       const difficulty = escapeHtml(question.difficulty || "Unspecified");
       const editorStatus = escapeHtml(question.editorStatus || "Unspecified");
       const lastReviewedAt = escapeHtml(formatQuestionListDate(question.lastReviewedAt));
@@ -2375,12 +2448,18 @@ function renderQuestionRows() {
       const statusClass = getQuestionStatusClassName(question.editorStatus, "question-status");
 
       return `
-        <div class="question-row" data-question-id="${objectId}" tabindex="0" role="link" aria-label="Open question ${questionNumberLabel}">
-          <span class="question-number">${questionNumberLabel}</span>
+        <div class="question-row" data-question-id="${objectId}" tabindex="0" role="link" aria-label="Open question created ${createdAt}">
+          <span class="question-date">${createdAt}</span>
           <span class="question-specialty">${specialty}</span>
           <span class="question-section">${section}</span>
-          <span class="question-stem-preview" title="${stemPreview}">${stemPreview}</span>
-          <span class="question-correct-answer" title="${correctAnswer}">${correctAnswer}</span>
+          <span
+            class="question-stem-preview"
+            data-question-id="${objectId}"
+            role="button"
+            tabindex="0"
+            aria-label="Preview full question stem"
+            title="Preview full stem"
+          >${stemPreview}</span>
           <span class="question-difficulty-badge ${difficultyClass}">${difficulty}</span>
           <span class="question-status-badge ${statusClass}">${editorStatus}</span>
           <span class="question-date">${lastReviewedAt}</span>
@@ -2390,7 +2469,7 @@ function renderQuestionRows() {
               type="button"
               class="question-edit-button"
               data-question-id="${objectId}"
-              aria-label="Edit question ${questionNumberLabel}"
+              aria-label="Edit question created ${createdAt}"
               title="Edit question"
             >
               ✎
@@ -2404,45 +2483,36 @@ function renderQuestionRows() {
   updateQuestionListFooter(filteredQuestions.length, displayedQuestions.length);
 }
 
+function openQuestionStemOverlay(stemText) {
+  const overlay = document.getElementById("question-stem-overlay");
+  const body = document.getElementById("question-stem-body");
+  if (!overlay || !body) return;
+
+  body.textContent = String(stemText || "").trim() || "No stem available.";
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+function closeQuestionStemOverlay() {
+  const overlay = document.getElementById("question-stem-overlay");
+  const body = document.getElementById("question-stem-body");
+  if (!overlay || !body) return;
+
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  body.textContent = "";
+}
+
 async function fetchQuestions() {
   const list = document.getElementById("questions-list");
   if (!list) return;
 
   list.innerHTML = '<div class="question-list-message">Loading questions...</div>';
 
-  if (typeof Parse === "undefined") {
-    list.innerHTML = '<div class="question-list-message error">Parse SDK is not available.</div>';
-    return;
-  }
-
   try {
-    const Question = Parse.Object.extend("Question");
-    const questionObjects = [];
-    const batchSize = 200;
-    let skip = 0;
-
-    while (true) {
-      const query = new Parse.Query(Question);
-      query.limit(batchSize);
-      query.skip(skip);
-      query.descending("updatedAt");
-
-      const batch = await query.find();
-      questionObjects.push(...batch);
-
-      if (batch.length < batchSize) {
-        break;
-      }
-
-      skip += batchSize;
-    }
-
-    const correctAnswersById = await fetchCorrectAnswersByQuestionIds(
-      questionObjects.map((question) => question.id)
-    );
-
-    pageState.questionsData = questionObjects.map((question) =>
-      normalizeQuestionRecord(question, correctAnswersById)
+    const questions = await window.back4app.runCloudFunction("listQuestions");
+    pageState.questionsData = (Array.isArray(questions) ? questions : []).map((question) =>
+      normalizeQuestionRecord(question)
     );
     pageState.questionsLoaded = true;
     syncQuestionFilterOptions(pageState.questionsData);
@@ -2666,6 +2736,8 @@ function bindQuestionsListPage() {
   const sortSelect = document.getElementById("question-sort");
   const list = document.getElementById("questions-list");
   const loadMoreButton = document.getElementById("questions-load-more");
+  const stemOverlay = document.getElementById("question-stem-overlay");
+  const stemOverlayClose = document.getElementById("question-stem-close");
 
   setQuestionsFeedback("", "success");
   pageState.questionVisibleCount = 100;
@@ -2695,6 +2767,17 @@ function bindQuestionsListPage() {
 
   if (list) {
     list.addEventListener("click", (event) => {
+      const stemPreviewButton = event.target.closest(".question-stem-preview");
+      if (stemPreviewButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const selectedQuestion = pageState.questionsData.find(
+          (question) => question.objectId === stemPreviewButton.dataset.questionId
+        );
+        openQuestionStemOverlay(selectedQuestion?.questionText || selectedQuestion?.stemPreview || "");
+        return;
+      }
+
       const editButton = event.target.closest(".question-edit-button");
       if (editButton) {
         event.preventDefault();
@@ -2709,12 +2792,37 @@ function bindQuestionsListPage() {
     });
 
     list.addEventListener("keydown", (event) => {
+      const stemPreviewButton = event.target.closest(".question-stem-preview");
+      if (stemPreviewButton && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        const selectedQuestion = pageState.questionsData.find(
+          (question) => question.objectId === stemPreviewButton.dataset.questionId
+        );
+        openQuestionStemOverlay(selectedQuestion?.questionText || selectedQuestion?.stemPreview || "");
+        return;
+      }
+
       const questionRow = event.target.closest(".question-row");
       if (!questionRow) return;
+      if (stemPreviewButton) return;
 
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         navigateToQuestionEditor(questionRow.dataset.questionId);
+      }
+    });
+  }
+
+  if (stemOverlayClose) {
+    stemOverlayClose.addEventListener("click", () => {
+      closeQuestionStemOverlay();
+    });
+  }
+
+  if (stemOverlay) {
+    stemOverlay.addEventListener("click", (event) => {
+      if (event.target === stemOverlay) {
+        closeQuestionStemOverlay();
       }
     });
   }
@@ -2745,11 +2853,13 @@ function bindQuestionsAddPage() {
 
   setQuestionsFeedback("", "success");
   initializeQuestionEditorState();
+  initializeQuestionMediaSelections();
   bindAutoResizingTextarea(stemTextarea);
   bindAutoResizingTextarea(critiqueTextarea);
   bindAutoResizingTextarea(generateSourceTextarea);
   renderQuestionOptionsEditor();
   renderQuestionReferencesEditor();
+  renderQuestionMediaSelections();
   renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
   setQuestionTopicCreatorState({ visible: false, enabled: false });
   populateQuestionAuthorField();
@@ -2968,6 +3078,34 @@ function bindQuestionsAddPage() {
       parseQuestionReference(parseButton.dataset.referenceParse);
     });
   }
+
+  getQuestionMediaGroups().forEach((group) => {
+    const input = document.getElementById(group.inputId);
+    const list = document.getElementById(group.listId);
+    const triggerButton = document.querySelector(`[data-file-input="${group.inputId}"]`);
+
+    if (triggerButton && input) {
+      triggerButton.addEventListener("click", () => {
+        input.click();
+      });
+    }
+
+    if (input) {
+      input.addEventListener("change", (event) => {
+        appendQuestionMediaSelections(group.inputId, event.target.files);
+        event.target.value = "";
+      });
+    }
+
+    if (list) {
+      list.addEventListener("click", (event) => {
+        const removeButton = event.target.closest(".question-media-chip-remove");
+        if (!removeButton) return;
+
+        removeQuestionMediaSelection(removeButton.dataset.inputId, removeButton.dataset.fileId);
+      });
+    }
+  });
 
   if (specialtySelect) {
     specialtySelect.addEventListener("change", async (event) => {

@@ -59,13 +59,12 @@
     </div>
   </div>
 
-  <div class="question-table-shell">
+    <div class="question-table-shell">
     <div class="question-list-header">
-      <span>Question #</span>
+      <span>Created At</span>
       <span>Specialty</span>
       <span>Section</span>
       <span>Stem Preview</span>
-      <span>Correct Answer</span>
       <span>Difficulty</span>
       <span>Editor Status</span>
       <span>Last Reviewed</span>
@@ -83,3 +82,11 @@
     <button type="button" id="questions-load-more" class="button button-secondary hidden">Load More</button>
   </div>
 </section>
+
+<div id="question-stem-overlay" class="login-overlay hidden" aria-hidden="true">
+  <div class="login-sheet question-stem-sheet" role="dialog" aria-modal="true" aria-labelledby="question-stem-title">
+    <button type="button" class="login-close" id="question-stem-close" aria-label="Close stem preview">×</button>
+    <h2 id="question-stem-title">Question Stem</h2>
+    <p id="question-stem-body" class="question-stem-body"></p>
+  </div>
+</div>

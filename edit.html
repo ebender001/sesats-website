@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Question Review Stub</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main class="page-shell">
+    <section class="page-title">
+      <h2>Question Review</h2>
+    </section>
+
+    <section class="invite-user-card">
+      <div class="invite-user-intro">
+        <p class="invite-user-eyebrow">ABTS SESATS Administration</p>
+        <h3>Review Stub</h3>
+        <p>
+          This placeholder is available only after a question is selected from the list.
+          The full question review workflow will be built here later.
+        </p>
+      </div>
+
+      <div class="invite-user-form">
+        <label class="invite-user-label" for="question-review-question-id">
+          Question ID
+          <input id="question-review-question-id" type="text" readonly />
+        </label>
+
+        <section class="question-references-panel" aria-labelledby="question-review-title">
+          <div class="question-references-header">
+            <div>
+              <h4 id="question-review-title">Question Review</h4>
+              <p class="question-references-help">
+                Review controls will be added here in a later step.
+              </p>
+            </div>
+          </div>
+
+          <div class="placeholder-card institution-placeholder-card">
+            <div class="placeholder-icon">i</div>
+            <p>
+              Stub only. This section will eventually support reviewer decisions,
+              comments, and review history for the selected question.
+            </p>
+          </div>
+        </section>
+
+        <div class="question-form-footer">
+          <a href="index.html#questions-list" class="button button-secondary">Back to Questions</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const input = document.getElementById("question-review-question-id");
+      if (input) {
+        input.value = params.get("id") || "";
+      }
+    })();
+  </script>
+</body>
+</html>
