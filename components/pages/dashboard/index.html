@@ -1,8 +1,24 @@
-<section class="page-title">
-  <h2>Dashboard</h2>
+<section class="page-title page-title-with-actions">
+  <div>
+    <h2>Dashboard</h2>
+    <p>Overview of question bank health and activity.</p>
+  </div>
+
+  <div class="dashboard-page-actions">
+    <button type="button" class="dashboard-toolbar-button">
+      <span>May 26 – Jun 24, 2025</span>
+      <span aria-hidden="true">⌄</span>
+    </button>
+    <button type="button" class="dashboard-toolbar-button">
+      <span aria-hidden="true">☷</span>
+      <span>Filters</span>
+    </button>
+  </div>
 </section>
 
-<section class="placeholder-card">
-  <div class="placeholder-icon">▦</div>
-  <p>Dashboard content will be added here.</p>
+<section id="dashboard-root" class="dashboard-shell" aria-live="polite">
+  <div class="dashboard-loading-card">
+    <div class="dashboard-loading-title">Loading dashboard metrics...</div>
+    <p>Pulling question bank KPIs, charts, and editorial activity from Back4App.</p>
+  </div>
 </section>

@@ -1,10 +1,40 @@
 <header class="site-header">
-  <div class="brand">
-    <img class="brand-logo" src="images/HeaderLogo2.png" alt="ABTS logo" />
-    <h1>SESATS Administration</h1>
+  <button
+    id="nav-toggle-button"
+    class="nav-toggle-button"
+    type="button"
+    aria-expanded="false"
+    aria-controls="app-nav-panel"
+    aria-label="Open navigation menu"
+  >
+    <span class="nav-toggle-lines" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+    </span>
+  </button>
+
+  <div class="header-search-shell">
+    <span class="header-search-icon" aria-hidden="true">⌕</span>
+    <input
+      class="header-search-input"
+      type="search"
+      placeholder="Search questions, topics, references..."
+      aria-label="Search questions, topics, references"
+    />
   </div>
 
-  <div class="admin-menu user-menu">
+  <div class="header-actions">
+    <button type="button" class="header-icon-button" aria-label="Notifications">
+      <span class="header-icon-symbol" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M8.5 17.5h7M9 17.5V11a3 3 0 1 1 6 0v6.5M7 17.5h10l-1.25-2V11a3.75 3.75 0 1 0-7.5 0v4.5L7 17.5Z" />
+        </svg>
+      </span>
+      <span class="header-notification-badge">5</span>
+    </button>
+
+    <div class="admin-menu user-menu">
     <button id="user-action-button" class="user-action" type="button" aria-expanded="false">
       Login
       <span class="caret">▾</span>
@@ -13,6 +43,7 @@
       <a href="#" class="user-dropdown-item" id="edit-profile" role="menuitem">Edit Profile</a>
       <a href="#" class="user-dropdown-item" id="logout" role="menuitem">Log Out</a>
     </div>
+  </div>
   </div>
 
   <div id="login-overlay" class="login-overlay hidden" aria-hidden="true">

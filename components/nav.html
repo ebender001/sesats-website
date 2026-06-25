@@ -1,8 +1,35 @@
-<div class="nav-shell">
+<div id="nav-overlay" class="nav-overlay hidden"></div>
+<aside id="app-nav-panel" class="nav-shell" aria-label="Main navigation">
+  <div class="nav-panel-brand">
+    <img class="nav-brand-logo" src="images/HeaderLogo2.png" alt="ABTS logo" />
+    <button id="nav-close-button" class="nav-close-button" type="button" aria-label="Close navigation menu">×</button>
+  </div>
+
+  <div class="nav-panel-header">
+    <div class="nav-panel-title-block">
+      <img class="nav-panel-title-logo" src="images/HeaderLogo2.png" alt="ABTS logo" />
+      <div>
+        <h2>SESATS<br />Administration</h2>
+      </div>
+    </div>
+  </div>
+
   <nav class="main-nav" aria-label="Main navigation">
-    <a href="#dashboard" class="nav-link active" data-section="dashboard">Dashboard</a>
+    <a href="#dashboard" class="nav-link active" data-section="dashboard">
+      <span class="nav-link-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+          <path d="M4.5 5.5h6v6h-6zM13.5 5.5h6v6h-6zM4.5 14.5h6v6h-6zM13.5 14.5h6v6h-6z" />
+        </svg>
+      </span>
+      <span>Dashboard</span>
+    </a>
     <div class="nav-item nav-item-has-submenu">
       <a href="#users" class="nav-link nav-link-has-submenu" data-section="users">
+        <span class="nav-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+            <path d="M9 11a3.25 3.25 0 1 0 0-6.5A3.25 3.25 0 0 0 9 11Zm7.25-.75a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM3.75 18.75c0-2.35 2.7-4.25 6.02-4.25s6.03 1.9 6.03 4.25M14.25 18.75c.18-1.68 1.97-3.03 4.18-3.03 1 .02 1.98.29 2.82.78" />
+          </svg>
+        </span>
         <span>Users</span>
         <span class="nav-link-caret" aria-hidden="true">▾</span>
       </a>
@@ -13,6 +40,11 @@
     </div>
     <div class="nav-item nav-item-has-submenu">
       <a href="#institutions" class="nav-link nav-link-has-submenu" data-section="institutions">
+        <span class="nav-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+            <path d="M4.5 19.5h15M6.5 19.5v-9h4v9M13.5 19.5v-12h4v12M8.5 7.5h.01M15.5 10.5h.01M15.5 13.5h.01M15.5 16.5h.01M8.5 10.5h.01M8.5 13.5h.01M12 4.5l7.5 3H4.5L12 4.5Z" />
+          </svg>
+        </span>
         <span>Institutions</span>
         <span class="nav-link-caret" aria-hidden="true">▾</span>
       </a>
@@ -23,6 +55,11 @@
     </div>
     <div class="nav-item nav-item-has-submenu">
       <a href="#questions" class="nav-link nav-link-has-submenu" data-section="questions">
+        <span class="nav-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+            <path d="M9.25 9.25a2.75 2.75 0 1 1 4.11 2.4c-.97.56-1.61 1.13-1.61 2.35M12 18h.01M5 5.75h14v12.5H5z" />
+          </svg>
+        </span>
         <span>Questions</span>
         <span class="nav-link-caret" aria-hidden="true">▾</span>
       </a>
@@ -31,8 +68,50 @@
         <a href="#questions-add" class="sub-nav-link" data-section="questions-add">Add New Question</a>
       </nav>
     </div>
-    <a href="#content" class="nav-link" data-section="content">Content</a>
-    <a href="#reports" class="nav-link" data-section="reports">Reports</a>
-    <a href="#settings" class="nav-link" data-section="settings">Settings</a>
+    <a href="#content" class="nav-link" data-section="content">
+      <span class="nav-link-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+          <path d="M7 5.5h7.5l3 3V18.5H7zM14.5 5.5v3h3M9.5 11h5M9.5 14h5" />
+        </svg>
+      </span>
+      <span>Content</span>
+    </a>
+    <a href="#reports" class="nav-link" data-section="reports">
+      <span class="nav-link-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+          <path d="M5 19.5h14M8 17V11M12 17V7M16 17v-4" />
+        </svg>
+      </span>
+      <span>Reports</span>
+    </a>
+    <a href="#settings" class="nav-link" data-section="settings">
+      <span class="nav-link-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+          <path d="M12 9.25A2.75 2.75 0 1 1 12 14.75 2.75 2.75 0 0 1 12 9.25Zm7.25 2.75-.93.54a6.82 6.82 0 0 1-.42 1.02l.54.94-1.88 1.88-.94-.54a6.82 6.82 0 0 1-1.02.42l-.54.93h-2.66l-.54-.93a6.82 6.82 0 0 1-1.02-.42l-.94.54-1.88-1.88.54-.94a6.82 6.82 0 0 1-.42-1.02l-.93-.54v-2.66l.93-.54a6.82 6.82 0 0 1 .42-1.02l-.54-.94 1.88-1.88.94.54c.33-.16.67-.3 1.02-.42l.54-.93h2.66l.54.93c.35.12.69.26 1.02.42l.94-.54 1.88 1.88-.54.94c.16.33.3.67.42 1.02l.93.54v2.66Z" />
+        </svg>
+      </span>
+      <span>Settings</span>
+    </a>
+    <a href="#dev-tools" class="nav-link" data-section="dev-tools">
+      <span class="nav-link-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+          <path d="M10 4.5h4M11 4.5v4.25l-4.6 7.58A2 2 0 0 0 8.1 19.5h7.8a2 2 0 0 0 1.7-3.17L13 8.75V4.5M8.75 14.5h6.5" />
+        </svg>
+      </span>
+      <span>Dev Tools</span>
+      <span class="nav-link-tag">DEV</span>
+    </a>
   </nav>
-</div>
+
+  <div class="nav-support-card">
+    <div class="nav-support-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+        <path d="M12 18h.01M9.5 9.75a2.5 2.5 0 1 1 4.2 1.83c-.87.74-1.45 1.31-1.45 2.42M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Z" />
+      </svg>
+    </div>
+    <div>
+      <strong>Need help?</strong>
+      <p>View Documentation</p>
+    </div>
+  </div>
+</aside>

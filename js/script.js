@@ -1,6 +1,7 @@
 const DEFAULT_SECTION = "dashboard";
 const VALID_SECTIONS = new Set([
   "dashboard",
+  "dev-tools",
   "users",
   "users-list",
   "users-invite",
@@ -18,6 +19,7 @@ const VALID_SECTIONS = new Set([
 const authState = {
   loggedIn: false,
   userName: "Admin User",
+  userRole: "Administrator",
 };
 
 const QUESTION_TYPE_MULTIPLE_CHOICE = "multiple_choice";
@@ -72,6 +74,7 @@ function getPagePath(section) {
   if (section === "questions-add") return "components/pages/questions/add.html";
   if (section === "questions-list") return "components/pages/questions/list.html";
   if (section === "content") return "components/pages/content/index.html";
+  if (section === "dev-tools") return "components/pages/dev-tools/index.html";
   if (section === "reports") return "components/pages/reports/index.html";
   if (section === "settings") return "components/pages/settings/index.html";
   return `components/pages/${section}.html`;
@@ -112,9 +115,28 @@ function renderHeaderAuth() {
 
   if (!actionButton) return;
 
+  const safeUserName = String(authState.userName || "Admin User").trim() || "Admin User";
+  const userRole = String(authState.userRole || "Administrator").trim() || "Administrator";
+  const userInitials = safeUserName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((segment) => segment.charAt(0).toUpperCase())
+    .join("") || "AU";
+
   actionButton.innerHTML = authState.loggedIn
-    ? `${authState.userName}<span class="caret">▾</span>`
-    : `Login<span class="caret">▾</span>`;
+    ? `<span class="user-avatar" aria-hidden="true">${userInitials}</span>
+       <span class="user-meta">
+         <span class="user-name">${escapeHtml(safeUserName)}</span>
+         <span class="user-role">${escapeHtml(userRole)}</span>
+       </span>
+       <span class="caret">▾</span>`
+    : `<span class="user-avatar" aria-hidden="true">?</span>
+       <span class="user-meta">
+         <span class="user-name">Sign In</span>
+         <span class="user-role">Administrator access</span>
+       </span>
+       <span class="caret">▾</span>`;
   actionButton.setAttribute("aria-expanded", "false");
 
   if (dropdown) {
@@ -229,6 +251,7 @@ function bindHeaderActions() {
 
         authState.loggedIn = true;
         authState.userName = result.displayName || result.username || identifier;
+        authState.userRole = "Administrator";
 
         if (typeof Parse !== "undefined" && result.sessionToken) {
           await Parse.User.become(result.sessionToken);
@@ -268,6 +291,7 @@ function bindHeaderActions() {
       event.preventDefault();
       authState.loggedIn = false;
       authState.userName = "Admin User";
+      authState.userRole = "Administrator";
       if (typeof Parse !== "undefined" && typeof Parse.User?.logOut === "function") {
         Parse.User.logOut().catch((error) => {
           console.error("Unable to log out Parse user.", error);
@@ -435,6 +459,122 @@ function setInviteUserNotice(message, type) {
   notice.textContent = message;
   notice.classList.remove("hidden", "success", "error");
   notice.classList.add(type === "success" ? "success" : "error");
+}
+
+function setDevToolsFeedback(message, type) {
+  const feedback = document.getElementById("dev-tools-feedback");
+  if (!feedback) return;
+
+  if (!message) {
+    feedback.textContent = "";
+    feedback.classList.add("hidden");
+    feedback.classList.remove("success", "error");
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.classList.remove("hidden", "success", "error");
+  feedback.classList.add(type === "success" ? "success" : "error");
+}
+
+function setDevToolsSubmitting(mode, isSubmitting) {
+  const seedButton = document.getElementById("dev-tools-seed-button");
+  const clearButton = document.getElementById("dev-tools-clear-button");
+  const countInput = document.getElementById("dev-tools-seed-count");
+  const seedBatchInput = document.getElementById("dev-tools-seed-batch-id");
+
+  if (seedButton) {
+    const isSeedMode = mode === "seed";
+    seedButton.disabled = isSubmitting && isSeedMode;
+    seedButton.textContent = isSubmitting && isSeedMode ? "Seeding..." : "Seed Development Data";
+  }
+
+  if (clearButton) {
+    const isClearMode = mode === "clear";
+    clearButton.disabled = isSubmitting && isClearMode;
+    clearButton.textContent = isSubmitting && isClearMode ? "Removing..." : "Remove Seeded Data";
+  }
+
+  if (countInput) {
+    countInput.disabled = isSubmitting && mode === "seed";
+  }
+
+  if (seedBatchInput) {
+    seedBatchInput.disabled = isSubmitting && mode === "clear";
+  }
+}
+
+function bindDevToolsPage() {
+  const seedForm = document.getElementById("dev-tools-seed-form");
+  const clearForm = document.getElementById("dev-tools-clear-form");
+  if (!seedForm || !clearForm) return;
+
+  setDevToolsFeedback("", "success");
+  setDevToolsSubmitting("seed", false);
+  setDevToolsSubmitting("clear", false);
+
+  seedForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const countInput = document.getElementById("dev-tools-seed-count");
+    const requestedCount = Number.parseInt(countInput?.value || "200", 10);
+    const questionCount = Math.max(1, Math.min(500, Number.isNaN(requestedCount) ? 200 : requestedCount));
+
+    setDevToolsFeedback("", "success");
+    setDevToolsSubmitting("seed", true);
+
+    try {
+      const result = await window.back4app.runCloudFunction("seedDevelopmentData", {
+        questionCount,
+      });
+
+      const batchId = result?.seedBatchId || "unknown";
+      const createdQuestions = result?.createdCounts?.Question ?? questionCount;
+      const batchInput = document.getElementById("dev-tools-seed-batch-id");
+      if (batchInput && result?.seedBatchId) {
+        batchInput.value = result.seedBatchId;
+      }
+      setDevToolsFeedback(
+        `Seed data created successfully. Batch ${batchId} created ${createdQuestions} questions.`,
+        "success"
+      );
+    } catch (error) {
+      const message = error?.message || "Unable to seed development data right now.";
+      setDevToolsFeedback(message, "error");
+    } finally {
+      setDevToolsSubmitting("seed", false);
+    }
+  });
+
+  clearForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const seedBatchInput = document.getElementById("dev-tools-seed-batch-id");
+    const seedBatchId = String(seedBatchInput?.value || "").trim();
+    const payload = seedBatchId ? { seedBatchId } : {};
+
+    setDevToolsFeedback("", "success");
+    setDevToolsSubmitting("clear", true);
+
+    try {
+      const result = await window.back4app.runCloudFunction("clearSeedData", payload);
+      const deletedCounts = result?.deletedCounts || {};
+      const totalDeleted = Object.values(deletedCounts).reduce(
+        (sum, value) => sum + (Number.isFinite(value) ? value : 0),
+        0
+      );
+      const scopeLabel = seedBatchId ? `batch ${seedBatchId}` : "all seeded data";
+      setDevToolsFeedback(
+        `Removed ${totalDeleted} seeded records from ${scopeLabel}.`,
+        "success"
+      );
+    } catch (error) {
+      const message = error?.message || "Unable to remove seeded data right now.";
+      setDevToolsFeedback(message, "error");
+    } finally {
+      setDevToolsSubmitting("clear", false);
+    }
+  });
 }
 
 function setEditInstitutionNotice(message, type) {
@@ -3248,6 +3388,14 @@ function bindInviteUserPage() {
 }
 
 function initializeSection(section) {
+  if (section === "dashboard" && typeof bindDashboardPage === "function") {
+    void bindDashboardPage();
+  }
+
+  if (section === "dev-tools") {
+    bindDevToolsPage();
+  }
+
   if (section === "questions-add") {
     bindQuestionsAddPage();
   }
@@ -3306,19 +3454,58 @@ async function navigateToSection(section, { updateHash = true } = {}) {
 function bindNavLinks() {
   const navLinks = document.querySelectorAll(".nav-link, .sub-nav-link");
   const navItemsWithSubmenus = document.querySelectorAll(".nav-item-has-submenu");
+  const navPanel = document.getElementById("app-nav-panel");
+  const navOverlay = document.getElementById("nav-overlay");
+  const navToggleButton = document.getElementById("nav-toggle-button");
+  const navCloseButton = document.getElementById("nav-close-button");
 
-  function usesTapDropdown() {
-    return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  function isMobileNavViewport() {
+    return window.innerWidth < 800;
+  }
+
+  function setNavDrawerOpen(isOpen) {
+    document.body.classList.toggle("nav-panel-open", isOpen);
+    document.body.classList.toggle("nav-drawer-open", isOpen && isMobileNavViewport());
+    navPanel?.classList.toggle("is-visible", isOpen);
+    navOverlay?.classList.toggle("hidden", !(isOpen && isMobileNavViewport()));
+    navToggleButton?.classList.toggle("is-active", isOpen);
+
+    if (navToggleButton) {
+      navToggleButton.setAttribute("aria-expanded", String(isOpen));
+      navToggleButton.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+    }
   }
 
   function closeAllDropdowns() {
     navItemsWithSubmenus.forEach((item) => item.classList.remove("is-open"));
   }
 
+  function closeNavDrawer() {
+    setNavDrawerOpen(false);
+    closeAllDropdowns();
+  }
+
+  function toggleNavDrawer() {
+    const isOpen = navPanel?.classList.contains("is-visible");
+    setNavDrawerOpen(!isOpen);
+  }
+
   navItemsWithSubmenus.forEach((item) => {
     item.addEventListener("mouseleave", () => {
       item.classList.remove("submenu-locked");
     });
+  });
+
+  navToggleButton?.addEventListener("click", () => {
+    toggleNavDrawer();
+  });
+
+  navCloseButton?.addEventListener("click", () => {
+    closeNavDrawer();
+  });
+
+  navOverlay?.addEventListener("click", () => {
+    closeNavDrawer();
   });
 
   navLinks.forEach((link) => {
@@ -3331,15 +3518,12 @@ function bindNavLinks() {
 
       const parentNavItem = link.closest(".nav-item-has-submenu");
 
-      if (
-        usesTapDropdown() &&
-        parentNavItem &&
-        link.classList.contains("nav-link") &&
-        !parentNavItem.classList.contains("is-open")
-      ) {
-        closeAllDropdowns();
-        parentNavItem.classList.add("is-open");
-        return;
+      if (parentNavItem && link.classList.contains("nav-link")) {
+        if (!parentNavItem.classList.contains("is-open")) {
+          closeAllDropdowns();
+          parentNavItem.classList.add("is-open");
+          return;
+        }
       }
 
       await navigateToSection(section);
@@ -3347,16 +3531,32 @@ function bindNavLinks() {
         parentNavItem.classList.add("submenu-locked");
         link.blur();
       }
-      closeAllDropdowns();
+      if (isMobileNavViewport()) {
+        closeNavDrawer();
+      }
     });
   });
 
   document.addEventListener("click", (event) => {
-    if (!usesTapDropdown()) return;
     if (!event.target.closest(".nav-item-has-submenu")) {
       closeAllDropdowns();
     }
   });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeNavDrawer();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    const shouldBeOpen = window.innerWidth >= 800;
+    if (shouldBeOpen !== navPanel?.classList.contains("is-visible")) {
+      setNavDrawerOpen(shouldBeOpen);
+    }
+  });
+
+  setNavDrawerOpen(window.innerWidth >= 800);
 }
 
 async function loadPageComponents() {

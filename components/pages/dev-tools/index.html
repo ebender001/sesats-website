@@ -1,0 +1,60 @@
+<section class="page-title">
+  <h2>Dev Tools</h2>
+</section>
+
+<section class="dashboard-tools-card">
+  <div class="dashboard-tools-header">
+    <div class="dashboard-tools-icon" aria-hidden="true">▦</div>
+    <div>
+      <h3>Seed Data Management</h3>
+      <p>Create or remove development seed data without leaving the admin UI.</p>
+    </div>
+  </div>
+
+  <form id="dev-tools-seed-form" class="dashboard-seed-form">
+    <label class="dashboard-seed-label" for="dev-tools-seed-count">
+      Question count
+      <input
+        id="dev-tools-seed-count"
+        name="questionCount"
+        type="number"
+        min="1"
+        max="500"
+        value="200"
+        inputmode="numeric"
+      />
+    </label>
+
+    <div class="dashboard-seed-actions">
+      <button id="dev-tools-seed-button" type="submit" class="button-primary">
+        Seed Development Data
+      </button>
+    </div>
+  </form>
+
+  <form id="dev-tools-clear-form" class="dashboard-seed-form">
+    <label class="dashboard-seed-label" for="dev-tools-seed-batch-id">
+      Optional seed batch ID
+      <input
+        id="dev-tools-seed-batch-id"
+        name="seedBatchId"
+        type="text"
+        placeholder="seed-YYYYMMDD-HHmmss"
+        autocomplete="off"
+      />
+    </label>
+
+    <div class="dashboard-seed-actions">
+      <button id="dev-tools-clear-button" type="submit" class="button-secondary">
+        Remove Seeded Data
+      </button>
+    </div>
+  </form>
+
+  <p class="dashboard-seed-help">
+    Admin or super admin access is required. Leave the batch ID blank to remove all rows where
+    <code>isSeedData=true</code>, or enter a batch ID to clear only one seed run.
+  </p>
+
+  <div id="dev-tools-feedback" class="dashboard-seed-feedback hidden" aria-live="polite"></div>
+</section>
