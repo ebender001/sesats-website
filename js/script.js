@@ -3392,6 +3392,10 @@ function initializeSection(section) {
     void bindDashboardPage();
   }
 
+  if (section === "content" && typeof bindContentPage === "function") {
+    void bindContentPage();
+  }
+
   if (section === "dev-tools") {
     bindDevToolsPage();
   }

@@ -1,8 +1,110 @@
-<section class="page-title">
-  <h2>Content</h2>
+<section class="page-title page-title-with-actions">
+  <div>
+    <h2>Question Bank</h2>
+    <p>Browse, filter, and manage educational content.</p>
+  </div>
+
+  <div class="question-bank-page-actions">
+    <button type="button" id="question-bank-new-question" class="button-primary">+ New Question</button>
+    <button type="button" id="question-bank-import" class="dashboard-toolbar-button">Import</button>
+    <button type="button" id="question-bank-export" class="dashboard-toolbar-button">Export</button>
+  </div>
 </section>
 
-<section class="placeholder-card">
-  <div class="placeholder-icon">📝</div>
-  <p>Content management will be added here.</p>
+<section id="question-bank-root" class="question-bank-shell" aria-live="polite">
+  <div class="question-bank-toolbar-card">
+    <div class="question-bank-search-row">
+      <label class="question-bank-search-field" for="question-bank-search">
+        <span class="question-bank-field-label sr-only">Search question bank</span>
+        <input
+          id="question-bank-search"
+          class="question-bank-search-input"
+          type="search"
+          placeholder="Search questions, stems, critiques, topics, references..."
+        />
+      </label>
+
+      <div class="question-bank-search-actions">
+        <button
+          type="button"
+          id="question-bank-filter-toggle"
+          class="dashboard-toolbar-button question-bank-filter-toggle"
+          aria-expanded="true"
+          aria-controls="question-bank-filter-row"
+        >
+          <span aria-hidden="true">☷</span>
+          <span>Filter</span>
+        </button>
+        <button type="button" id="question-bank-clear-filters" class="dashboard-toolbar-button">
+          Clear Filters
+        </button>
+      </div>
+    </div>
+
+    <div id="question-bank-filter-row" class="question-bank-filter-row">
+      <label class="question-bank-filter-field" for="question-bank-status-filter">
+        <span>Status</span>
+        <select id="question-bank-status-filter" class="question-bank-filter-control">
+          <option value="">All statuses</option>
+        </select>
+      </label>
+
+      <label class="question-bank-filter-field" for="question-bank-specialty-filter">
+        <span>Specialty</span>
+        <select id="question-bank-specialty-filter" class="question-bank-filter-control">
+          <option value="">All specialties</option>
+        </select>
+      </label>
+
+      <label class="question-bank-filter-field" for="question-bank-difficulty-filter">
+        <span>Difficulty</span>
+        <select id="question-bank-difficulty-filter" class="question-bank-filter-control">
+          <option value="">All difficulty levels</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <section class="question-bank-workspace">
+    <div class="question-bank-tabs" role="tablist" aria-label="Question bank content types">
+      <button type="button" class="question-bank-tab is-active" role="tab" aria-selected="true" data-tab="questions">
+        Questions
+      </button>
+      <button type="button" class="question-bank-tab" role="tab" aria-selected="false" data-tab="media">
+        Media
+      </button>
+      <button type="button" class="question-bank-tab" role="tab" aria-selected="false" data-tab="references">
+        References
+      </button>
+      <button type="button" class="question-bank-tab" role="tab" aria-selected="false" data-tab="ai-assets">
+        AI Assets
+      </button>
+      <button type="button" class="question-bank-tab" role="tab" aria-selected="false" data-tab="templates">
+        Templates
+      </button>
+    </div>
+
+    <div id="question-bank-feedback" class="question-bank-feedback hidden" role="status" aria-live="polite"></div>
+
+    <div id="question-bank-bulk-bar" class="question-bank-bulk-bar hidden"></div>
+
+    <div id="question-bank-table-region" class="question-bank-table-region">
+      <div class="question-bank-loading-card">
+        <div class="question-bank-loading-title">Loading question bank...</div>
+        <p>Pulling questions, references, media, and editorial metadata from Back4App.</p>
+      </div>
+    </div>
+  </section>
 </section>
+
+<div id="question-bank-preview-overlay" class="question-bank-preview-overlay hidden" aria-hidden="true">
+  <aside
+    id="question-bank-preview-drawer"
+    class="question-bank-preview-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="question-bank-preview-title"
+  >
+    <div id="question-bank-preview-content" class="question-bank-preview-content"></div>
+  </aside>
+</div>
