@@ -10,12 +10,18 @@
       <p>Start by selecting a specialty, topic, and difficulty.</p>
     </div>
 
-    <button type="button" id="import-question-button" class="button button-secondary">
-      AI Generate Question
-    </button>
+    <div class="question-form-actions">
+      <input
+        id="import-question-docx"
+        class="question-media-input-hidden"
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      />
+      <button type="button" id="import-question-docx-button" class="button button-secondary">
+        Import Word Question
+      </button>
+    </div>
   </div>
-
-  <div id="questions-feedback" class="question-list-message hidden" role="status" aria-live="polite"></div>
 
   <form id="add-question-form" class="invite-user-form">
     <div class="invite-user-grid question-meta-grid">
@@ -241,56 +247,16 @@
   </form>
 </section>
 
-<div id="question-generate-overlay" class="question-generate-overlay hidden" aria-hidden="true">
-  <div class="question-generate-sheet" role="dialog" aria-modal="true" aria-labelledby="question-generate-title">
-    <button
-      type="button"
-      class="question-generate-close"
-      id="question-generate-cancel"
-      aria-label="Cancel question generation"
-    >
-      ×
-    </button>
-    <h2 id="question-generate-title">AI Question Draft</h2>
-    <p class="question-generate-intro">
-      Paste a rough question idea, incomplete stem, or clinical scenario. AI will enhance it into a draft for review.
-    </p>
-    <div id="question-generate-notice" class="question-generate-notice" role="status" aria-live="polite"></div>
-    <form id="question-generate-form" class="question-generate-form">
-      <label class="question-generate-label" for="question-generate-source">
-        Question Input
-        <textarea
-          id="question-generate-source"
-          name="sourceText"
-          rows="8"
-          placeholder="Example: A patient presents after mitral valve repair with new hypotension and elevated left atrial pressure..."
-          required
-        ></textarea>
-      </label>
-      <label class="question-generate-label" for="question-generate-notes-input">
-        Special Hints or Notes to AI
-        <textarea
-          id="question-generate-notes-input"
-          name="generatorNotes"
-          rows="4"
-          placeholder="Optional: include teaching points, facts to emphasize, pitfalls to avoid, or instructions about tone and focus."
-        ></textarea>
-      </label>
-      <label class="question-generate-checkbox" for="question-generate-has-media">
-        <input id="question-generate-has-media" name="hasMedia" type="checkbox" />
-        <span>I will be supplying media files for this question.</span>
-      </label>
-      <p class="question-generate-helper">
-        AI will enhance the stem, generate 4 or 5 answer options with one correct answer, write a critique, and propose 1 to 3 literature references for you to review before saving.
-      </p>
-      <div class="question-generate-actions">
-        <button type="button" id="question-generate-cancel-button" class="button button-secondary">
-          Cancel
-        </button>
-        <button type="submit" id="question-generate-submit" class="button button-primary">
-          Generate Question
-        </button>
+<div id="question-feedback-dialog" class="question-feedback-dialog hidden" aria-hidden="true">
+  <div class="question-feedback-dialog-sheet" role="alertdialog" aria-labelledby="question-feedback-title" aria-describedby="question-feedback-message">
+    <div class="question-feedback-dialog-header">
+      <div>
+        <p id="question-feedback-title" class="question-feedback-dialog-title">Question Update</p>
+        <p id="question-feedback-message" class="question-feedback-dialog-message"></p>
       </div>
-    </form>
+      <button type="button" id="question-feedback-close" class="question-feedback-dialog-close" aria-label="Close message">
+        ×
+      </button>
+    </div>
   </div>
 </div>

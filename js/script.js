@@ -43,10 +43,6 @@ const pageState = {
   activeStatuses: [],
   specialtiesLoaded: false,
   questionAiMetadata: null,
-  questionGenerationState: {
-    status: "idle",
-    draft: null,
-  },
   questionMediaSelections: {},
 };
 
@@ -652,88 +648,15 @@ function populateQuestionAuthorField() {
   authorInput.value = getCurrentParseUserDisplayName();
 }
 
-function setQuestionGenerationNotice(message, type) {
-  const notice = document.getElementById("question-generate-notice");
-  if (!notice) return;
+function closeQuestionFeedbackDialog() {
+  const dialog = document.getElementById("question-feedback-dialog");
+  const sheet = document.querySelector("#question-feedback-dialog .question-feedback-dialog-sheet");
+  if (!dialog || !sheet) return;
 
-  if (!message) {
-    notice.innerHTML = "";
-    notice.classList.remove("is-visible", "error", "success", "loading");
-    return;
-  }
-
-  const variant = type === "success" ? "success" : type === "loading" ? "loading" : "error";
-  notice.classList.remove("error", "success", "loading");
-  notice.classList.add(variant);
-  notice.classList.add("is-visible");
-  notice.innerHTML =
-    variant === "loading"
-      ? '<span class="question-generate-inline-spinner" aria-hidden="true"></span><span>Generating question...</span>'
-      : `<span>${escapeHtml(message)}</span>`;
-}
-
-function setQuestionGenerationSubmitting(isSubmitting) {
-  const submitButton = document.getElementById("question-generate-submit");
-  const cancelButton = document.getElementById("question-generate-cancel-button");
-  const closeButton = document.getElementById("question-generate-cancel");
-  const sourceTextarea = document.getElementById("question-generate-source");
-  const notesTextarea = document.getElementById("question-generate-notes-input");
-  const hasMediaCheckbox = document.getElementById("question-generate-has-media");
-
-  if (submitButton) {
-    const generationStatus = pageState.questionGenerationState?.status || "idle";
-    submitButton.disabled = isSubmitting;
-    submitButton.textContent =
-      generationStatus === "ready"
-        ? "Accept Question"
-        : generationStatus === "error"
-          ? "Try Again"
-          : "Generate Question";
-  }
-
-  [cancelButton, closeButton, sourceTextarea, notesTextarea, hasMediaCheckbox].forEach((element) => {
-    if (element) {
-      element.disabled = isSubmitting;
-    }
-  });
-}
-
-function openQuestionGenerateOverlay() {
-  const overlay = document.getElementById("question-generate-overlay");
-  const sourceTextarea = document.getElementById("question-generate-source");
-  if (!overlay) return;
-
-  pageState.questionGenerationState = {
-    status: "idle",
-    draft: null,
-  };
-  setQuestionGenerationNotice("", "success");
-  setQuestionGenerationSubmitting(false);
-  overlay.classList.remove("hidden");
-  overlay.setAttribute("aria-hidden", "false");
-
-  if (sourceTextarea) {
-    window.setTimeout(() => sourceTextarea.focus(), 0);
-  }
-}
-
-function closeQuestionGenerateOverlay({ clearInput = false } = {}) {
-  const overlay = document.getElementById("question-generate-overlay");
-  const form = document.getElementById("question-generate-form");
-  if (!overlay) return;
-
-  overlay.classList.add("hidden");
-  overlay.setAttribute("aria-hidden", "true");
-  pageState.questionGenerationState = {
-    status: "idle",
-    draft: null,
-  };
-  setQuestionGenerationNotice("", "success");
-  setQuestionGenerationSubmitting(false);
-
-  if (clearInput && form) {
-    form.reset();
-  }
+  dialog.classList.add("hidden");
+  dialog.classList.remove("is-visible");
+  dialog.setAttribute("aria-hidden", "true");
+  sheet.classList.remove("is-success", "is-error");
 }
 
 function questionEditorHasDraftContent() {
@@ -751,6 +674,8 @@ function applyGeneratedQuestionDraftToEditor(draft) {
   const stemTextarea = document.getElementById("add-question-stem");
   const critiqueTextarea = document.getElementById("add-question-critique");
   const questionTypeSelect = document.getElementById("add-question-type");
+  const draftQuestionType =
+    draft?.questionType === QUESTION_TYPE_TRUE_FALSE ? QUESTION_TYPE_TRUE_FALSE : QUESTION_TYPE_MULTIPLE_CHOICE;
 
   if (!pageState.questionEditor) {
     initializeQuestionEditorState();
@@ -767,10 +692,10 @@ function applyGeneratedQuestionDraftToEditor(draft) {
   }
 
   if (questionTypeSelect) {
-    questionTypeSelect.value = QUESTION_TYPE_MULTIPLE_CHOICE;
+    questionTypeSelect.value = draftQuestionType;
   }
 
-  pageState.questionEditor.questionType = QUESTION_TYPE_MULTIPLE_CHOICE;
+  pageState.questionEditor.questionType = draftQuestionType;
   pageState.questionEditor.options = (Array.isArray(draft?.options) ? draft.options : []).map((option) =>
     createQuestionOption({
       text: String(option?.text || ""),
@@ -794,6 +719,7 @@ function applyGeneratedQuestionDraftToEditor(draft) {
         pmid: String(reference?.pmid || ""),
         url: String(reference?.url || ""),
         citationText: String(reference?.citationText || ""),
+        abstract: String(reference?.abstract || ""),
         note: String(reference?.note || ""),
       })
   );
@@ -813,19 +739,69 @@ function applyGeneratedQuestionDraftToEditor(draft) {
 }
 
 function setQuestionsFeedback(message, type) {
-  const feedback = document.getElementById("questions-feedback");
-  if (!feedback) return;
+  const dialog = document.getElementById("question-feedback-dialog");
+  const title = document.getElementById("question-feedback-title");
+  const messageElement = document.getElementById("question-feedback-message");
+  const sheet = document.querySelector("#question-feedback-dialog .question-feedback-dialog-sheet");
+  if (!dialog || !title || !messageElement || !sheet) return;
 
   if (!message) {
-    feedback.textContent = "";
-    feedback.classList.add("hidden");
-    feedback.classList.remove("success", "error");
+    messageElement.textContent = "";
+    closeQuestionFeedbackDialog();
     return;
   }
 
-  feedback.textContent = message;
-  feedback.classList.remove("hidden", "success", "error");
-  feedback.classList.add(type === "success" ? "success" : "error");
+  const isSuccess = type === "success";
+  title.textContent = isSuccess ? "Success" : "Needs Attention";
+  messageElement.textContent = message;
+  sheet.classList.toggle("is-success", isSuccess);
+  sheet.classList.toggle("is-error", !isSuccess);
+  dialog.classList.remove("hidden");
+  dialog.classList.add("is-visible");
+  dialog.setAttribute("aria-hidden", "false");
+}
+
+function resetQuestionAuthoringForm() {
+  const form = document.getElementById("add-question-form");
+  const questionTypeSelect = document.getElementById("add-question-type");
+  const stemTextarea = document.getElementById("add-question-stem");
+  const critiqueTextarea = document.getElementById("add-question-critique");
+  const specialtySelect = document.getElementById("add-question-specialty");
+  const addTopicInput = document.getElementById("add-question-topic-name");
+  const statusSelect = document.getElementById("add-question-status");
+
+  if (form) {
+    form.reset();
+  }
+
+  initializeQuestionEditorState();
+  initializeQuestionMediaSelections();
+  renderQuestionOptionsEditor();
+  renderQuestionReferencesEditor();
+  renderQuestionMediaSelections();
+  pageState.questionAiMetadata = null;
+
+  renderQuestionAddSpecialtyOptions(pageState.activeSpecialties || []);
+  if (specialtySelect) {
+    specialtySelect.value = "";
+  }
+
+  renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
+  if (addTopicInput) {
+    addTopicInput.value = "";
+  }
+  setQuestionTopicCreatorState({ visible: false, enabled: false });
+
+  renderQuestionAddStatusOptions(pageState.activeStatuses || []);
+  applyQuestionStatusAccent(statusSelect?.value || "");
+
+  if (questionTypeSelect) {
+    questionTypeSelect.value = QUESTION_TYPE_MULTIPLE_CHOICE;
+  }
+
+  bindAutoResizingTextarea(stemTextarea);
+  bindAutoResizingTextarea(critiqueTextarea);
+  populateQuestionAuthorField();
 }
 
 function setQuestionSaveSubmitting(isSubmitting) {
@@ -1077,6 +1053,55 @@ function findSpecialtyByName(name) {
   );
 }
 
+async function applyImportedClassification(inference) {
+  const specialtySelect = document.getElementById("add-question-specialty");
+  const topicSelect = document.getElementById("add-question-topic");
+  const addTopicInput = document.getElementById("add-question-topic-name");
+  const specialtyObjectId = String(inference?.specialtyObjectId || "").trim();
+  const topicName = String(inference?.topicName || "").trim();
+  const reviewMessage = String(inference?.reviewMessage || "").trim();
+
+  if (!specialtySelect || !specialtyObjectId) {
+    return reviewMessage || "The imported question could not be matched to a specialty. Please review it.";
+  }
+
+  specialtySelect.value = specialtyObjectId;
+  await loadQuestionTopicsForSpecialty(specialtyObjectId);
+  setQuestionTopicCreatorState({ visible: true, enabled: true });
+
+  if (!topicName) {
+    if (addTopicInput) {
+      addTopicInput.value = "";
+    }
+    return reviewMessage || "The imported question needs a topic selected before it can be saved.";
+  }
+
+  const matchingOption = Array.from(topicSelect?.options || []).find(
+    (option) => normalizeLookupText(option.value) === normalizeLookupText(topicName)
+  );
+
+  if (matchingOption && topicSelect) {
+    topicSelect.value = matchingOption.value;
+    if (addTopicInput) {
+      addTopicInput.value = "";
+    }
+    return reviewMessage;
+  }
+
+  if (topicSelect) {
+    topicSelect.value = "";
+  }
+
+  if (addTopicInput) {
+    addTopicInput.value = topicName;
+  }
+
+  return (
+    reviewMessage ||
+    `The imported question was matched to ${getSelectedOptionLabel(specialtySelect)}, but the topic "${topicName}" needs review or creation.`
+  );
+}
+
 function setQuestionTopicCreatorState({ visible, enabled, submitting = false } = {}) {
   const container = document.getElementById("question-topic-create");
   const input = document.getElementById("add-question-topic-name");
@@ -1267,6 +1292,7 @@ function questionReferenceHasContent(reference) {
     reference.pmid,
     reference.url,
     reference.citationText,
+    reference.abstract,
     reference.note,
     reference.parseInput,
   ].some((value) => String(value || "").trim().length > 0);
@@ -1292,6 +1318,7 @@ function collectQuestionReferencePayloads() {
         pmid: String(reference.pmid || "").trim(),
         url: String(reference.url || "").trim(),
         citationText: String(reference.citationText || reference.parseInput || "").trim(),
+        abstract: String(reference.abstract || "").trim(),
         note: String(reference.note || "").trim(),
         sortOrder: index,
         isPrimary: index === 0,
@@ -1506,7 +1533,12 @@ async function saveQuestionArticle() {
       },
     });
 
-    setQuestionsFeedback("Article saved successfully.", "success");
+    resetQuestionAuthoringForm();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setQuestionsFeedback(
+      "Article saved successfully. The form has been cleared and is ready for another question.",
+      "success"
+    );
   } catch (error) {
     console.error("Unable to save article.", error);
     const message = error?.message || "Unable to save the article right now.";
@@ -1516,72 +1548,75 @@ async function saveQuestionArticle() {
   }
 }
 
-function collectQuestionGenerationPayload() {
-  const specialtySelect = document.getElementById("add-question-specialty");
-  const topicSelect = document.getElementById("add-question-topic");
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-  return {
-    sourceText: document.getElementById("question-generate-source")?.value.trim() || "",
-    generatorNotes: document.getElementById("question-generate-notes-input")?.value.trim() || "",
-    specialty: getSelectedOptionLabel(specialtySelect),
-    topic: topicSelect?.value.trim() || "",
-    difficulty: document.getElementById("add-question-difficulty")?.value || "",
-    hasMedia: Boolean(document.getElementById("question-generate-has-media")?.checked),
-  };
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error(`Unable to read file ${file?.name || "document"}.`));
+
+    reader.readAsArrayBuffer(file);
+  });
 }
 
-async function generateAiQuestionDraft() {
-  if (pageState.questionGenerationState?.status === "ready" && pageState.questionGenerationState?.draft) {
-    applyGeneratedQuestionDraftToEditor(pageState.questionGenerationState.draft);
-    closeQuestionGenerateOverlay({ clearInput: true });
-    setQuestionsFeedback("AI draft added. Review and edit it before saving.", "success");
-    return;
+async function extractWordDocumentText(file) {
+  if (!window.mammoth || typeof window.mammoth.extractRawText !== "function") {
+    throw new Error("Word import is unavailable because the document parser did not load.");
   }
 
-  const payload = collectQuestionGenerationPayload();
-  if (!payload.sourceText) {
-    setQuestionGenerationNotice("Question input is required.", "error");
-    pageState.questionGenerationState = {
-      status: "error",
-      draft: null,
-    };
-    setQuestionGenerationSubmitting(false);
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const result = await window.mammoth.extractRawText({ arrayBuffer });
+  const value = String(result?.value || "").trim();
+
+  if (!value) {
+    throw new Error("The uploaded Word file did not contain readable question text.");
+  }
+
+  return value;
+}
+
+async function importQuestionFromDocumentFile(file) {
+  if (!file) {
     return;
   }
 
   if (
     questionEditorHasDraftContent() &&
-    !window.confirm("Generating a new AI draft will replace the current stem, options, critique, and references. Continue?")
+    !window.confirm("Importing a Word question will replace the current stem, options, critique, and references. Continue?")
   ) {
     return;
   }
 
-  pageState.questionGenerationState = {
-    status: "loading",
-    draft: null,
-  };
-  setQuestionGenerationNotice("Generating question...", "loading");
-  setQuestionGenerationSubmitting(true);
+  setQuestionsFeedback("", "success");
+  setQuestionSaveSubmitting(true);
 
   try {
-    const generatedDraft = await window.back4app.runCloudFunction("generateQuestionDraft", payload);
-    pageState.questionGenerationState = {
-      status: "ready",
-      draft: generatedDraft || {},
-    };
-    setQuestionGenerationNotice("Question draft generated. Review it, then accept it.", "success");
-    setQuestionGenerationSubmitting(false);
+    const documentText = await extractWordDocumentText(file);
+    const draft = await window.back4app.runCloudFunction("importQuestionDocumentDraft", {
+      fileName: file.name,
+      documentText,
+      difficulty: document.getElementById("add-question-difficulty")?.value || "",
+    });
+
+    applyGeneratedQuestionDraftToEditor(draft || {});
+    const classificationMessage = await applyImportedClassification(draft?.inference || {});
+
+    if (classificationMessage) {
+      setQuestionsFeedback(classificationMessage, "error");
+    } else {
+      setQuestionsFeedback(
+        "Word question imported successfully. Specialty, topic, references, and critique were filled in for review.",
+        "success"
+      );
+    }
   } catch (error) {
-    console.error("Unable to generate AI question draft.", error);
-    pageState.questionGenerationState = {
-      status: "error",
-      draft: null,
-    };
-    setQuestionGenerationNotice(
-      error?.message || "Unable to generate an AI draft right now. Please try again.",
+    console.error("Unable to import Word question.", error);
+    setQuestionsFeedback(
+      error?.message || "Unable to import the Word question right now.",
       "error"
     );
-    setQuestionGenerationSubmitting(false);
+  } finally {
+    setQuestionSaveSubmitting(false);
   }
 }
 
@@ -1630,6 +1665,7 @@ function createQuestionReference(overrides = {}) {
     pmid: "",
     url: "",
     citationText: "",
+    abstract: "",
     note: "",
     ...overrides,
   };
@@ -1756,6 +1792,15 @@ function renderQuestionReferencesEditor() {
             <label class="question-reference-field span-2">
               Year
               <input type="text" inputmode="numeric" data-reference-id="${escapeHtml(reference.id)}" data-field="year" value="${escapeHtml(reference.year)}" />
+            </label>
+            <label class="question-reference-field span-12">
+              Abstract
+              <textarea
+                rows="4"
+                data-reference-id="${escapeHtml(reference.id)}"
+                data-field="abstract"
+                placeholder="PubMed abstract will appear here when available."
+              >${escapeHtml(reference.abstract || "")}</textarea>
             </label>
             <label class="question-reference-field span-12">
               Note
@@ -2984,25 +3029,27 @@ function bindQuestionsAddPage() {
   const addTopicInput = document.getElementById("add-question-topic-name");
   const addTopicButton = document.getElementById("add-question-topic-button");
   const statusSelect = document.getElementById("add-question-status");
-  const importQuestionButton = document.getElementById("import-question-button");
-  const generateOverlay = document.getElementById("question-generate-overlay");
-  const generateForm = document.getElementById("question-generate-form");
-  const generateCancelButton = document.getElementById("question-generate-cancel-button");
-  const generateCloseButton = document.getElementById("question-generate-cancel");
-  const generateSourceTextarea = document.getElementById("question-generate-source");
+  const feedbackCloseButton = document.getElementById("question-feedback-close");
+  const importQuestionDocxButton = document.getElementById("import-question-docx-button");
+  const importQuestionDocxInput = document.getElementById("import-question-docx");
 
   setQuestionsFeedback("", "success");
   initializeQuestionEditorState();
   initializeQuestionMediaSelections();
   bindAutoResizingTextarea(stemTextarea);
   bindAutoResizingTextarea(critiqueTextarea);
-  bindAutoResizingTextarea(generateSourceTextarea);
   renderQuestionOptionsEditor();
   renderQuestionReferencesEditor();
   renderQuestionMediaSelections();
   renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
   setQuestionTopicCreatorState({ visible: false, enabled: false });
   populateQuestionAuthorField();
+
+  if (feedbackCloseButton) {
+    feedbackCloseButton.addEventListener("click", () => {
+      setQuestionsFeedback("", "success");
+    });
+  }
 
   if (questionTypeSelect) {
     questionTypeSelect.value = QUESTION_TYPE_MULTIPLE_CHOICE;
@@ -3053,36 +3100,15 @@ function bindQuestionsAddPage() {
     });
   }
 
-  if (importQuestionButton) {
-    importQuestionButton.addEventListener("click", () => {
-      openQuestionGenerateOverlay();
+  if (importQuestionDocxButton && importQuestionDocxInput) {
+    importQuestionDocxButton.addEventListener("click", () => {
+      importQuestionDocxInput.click();
     });
-  }
 
-  if (generateCancelButton) {
-    generateCancelButton.addEventListener("click", () => {
-      closeQuestionGenerateOverlay();
-    });
-  }
-
-  if (generateCloseButton) {
-    generateCloseButton.addEventListener("click", () => {
-      closeQuestionGenerateOverlay();
-    });
-  }
-
-  if (generateOverlay) {
-    generateOverlay.addEventListener("click", (event) => {
-      if (event.target === generateOverlay) {
-        closeQuestionGenerateOverlay();
-      }
-    });
-  }
-
-  if (generateForm) {
-    generateForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      await generateAiQuestionDraft();
+    importQuestionDocxInput.addEventListener("change", (event) => {
+      const [file] = Array.from(event.target.files || []);
+      void importQuestionFromDocumentFile(file);
+      event.target.value = "";
     });
   }
 
