@@ -1591,6 +1591,28 @@ body.nav-panel-open .nav-shell {
   border-color: #9eb8e4;
 }
 
+.invite-institution-support {
+  display: flex;
+  align-items: end;
+}
+
+.invite-institution-link {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--abts-blue);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+  cursor: pointer;
+}
+
+.invite-institution-link:hover,
+.invite-institution-link:focus {
+  color: var(--abts-navy);
+}
+
 .invite-user-actions {
   display: flex;
   align-items: center;

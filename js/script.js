@@ -425,6 +425,22 @@ function setInstitutionFormNotice(message, type) {
   notice.classList.add(type === "success" ? "success" : "error");
 }
 
+function setInviteInstitutionFormNotice(message, type) {
+  const notice = document.getElementById("invite-institution-form-notice");
+  if (!notice) return;
+
+  if (!message) {
+    notice.textContent = "";
+    notice.classList.add("hidden");
+    notice.classList.remove("success", "error");
+    return;
+  }
+
+  notice.textContent = message;
+  notice.classList.remove("hidden", "success", "error");
+  notice.classList.add(type === "success" ? "success" : "error");
+}
+
 function setUsersFeedback(message, type) {
   const feedback = document.getElementById("users-feedback");
   if (!feedback) return;
@@ -603,6 +619,38 @@ function resetInstitutionForm() {
 function clearInstitutionForm() {
   resetInstitutionForm();
   setInstitutionFormNotice("", "success");
+}
+
+function resetInviteInstitutionForm() {
+  const form = document.getElementById("invite-add-institution-form");
+  const activeCheckbox = document.getElementById("invite-institution-active");
+  if (form) {
+    form.reset();
+  }
+  if (activeCheckbox) {
+    activeCheckbox.checked = true;
+  }
+}
+
+function closeInviteInstitutionOverlay() {
+  const overlay = document.getElementById("invite-institution-overlay");
+  if (!overlay) return;
+
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  resetInviteInstitutionForm();
+  setInviteInstitutionFormNotice("", "success");
+}
+
+function openInviteInstitutionOverlay() {
+  const overlay = document.getElementById("invite-institution-overlay");
+  if (!overlay) return;
+
+  resetInviteInstitutionForm();
+  setInviteInstitutionFormNotice("", "success");
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  document.getElementById("invite-institution-name")?.focus();
 }
 
 function getUserLastName(displayName) {
@@ -2160,6 +2208,27 @@ function collectInstitutionFormPayload() {
   };
 }
 
+function collectInviteInstitutionFormPayload() {
+  const name = document.getElementById("invite-institution-name")?.value.trim() || "";
+  const city = document.getElementById("invite-institution-city")?.value.trim() || "";
+  const stateProvince = document.getElementById("invite-institution-state")?.value.trim() || "";
+  const institutionType = document.getElementById("invite-institution-type")?.value.trim() || "";
+  const contactEmail =
+    document.getElementById("invite-institution-contact-email")?.value.trim() || "";
+  const website = document.getElementById("invite-institution-website")?.value.trim() || "";
+  const isActive = Boolean(document.getElementById("invite-institution-active")?.checked);
+
+  return {
+    name,
+    city,
+    stateProvince,
+    institutionType,
+    contactEmail,
+    website,
+    isActive,
+  };
+}
+
 function collectEditInstitutionPayload() {
   const objectId = document.getElementById("edit-institution-object-id")?.value || "";
   const name = document.getElementById("edit-institution-name")?.value.trim() || "";
@@ -2763,6 +2832,20 @@ async function ensureInviteReferenceData() {
   }
 }
 
+async function refreshInviteInstitutionOptions(selectedInstitutionId = "") {
+  const institutions = await window.back4app.runCloudFunction("listInstitutions");
+  pageState.activeInstitutions = (Array.isArray(institutions) ? institutions : []).filter(
+    (institution) => institution?.isActive !== false
+  );
+  pageState.institutionsLoaded = true;
+  renderInviteInstitutionOptions(pageState.activeInstitutions);
+
+  const select = document.getElementById("invite-institution");
+  if (select && selectedInstitutionId) {
+    select.value = selectedInstitutionId;
+  }
+}
+
 async function refreshInstitutionsList() {
   pageState.institutionsLoaded = false;
   if (document.getElementById("institutions-list")) {
@@ -3355,10 +3438,22 @@ function bindQuestionsAddPage() {
 function bindInviteUserPage() {
   const form = document.getElementById("invite-user-form");
   const resetButton = document.getElementById("invite-user-reset");
+  const openInstitutionOverlayButton = document.getElementById(
+    "open-invite-institution-overlay"
+  );
+  const closeInstitutionOverlayButton = document.getElementById(
+    "close-invite-institution-overlay"
+  );
+  const cancelInstitutionOverlayButton = document.getElementById(
+    "cancel-invite-add-institution"
+  );
+  const institutionOverlay = document.getElementById("invite-institution-overlay");
+  const addInstitutionForm = document.getElementById("invite-add-institution-form");
 
   setInviteUserNotice("", "success");
   resetInviteSuccessCard();
   setInviteUserSubmitting(false);
+  setInviteInstitutionFormNotice("", "success");
 
   if (resetButton) {
     resetButton.addEventListener("click", (event) => {
@@ -3381,6 +3476,52 @@ function bindInviteUserPage() {
         "error"
       );
     });
+
+  if (openInstitutionOverlayButton) {
+    openInstitutionOverlayButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      openInviteInstitutionOverlay();
+    });
+  }
+
+  [closeInstitutionOverlayButton, cancelInstitutionOverlayButton].forEach((button) => {
+    if (!button) return;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeInviteInstitutionOverlay();
+    });
+  });
+
+  if (institutionOverlay) {
+    institutionOverlay.addEventListener("click", (event) => {
+      if (event.target === institutionOverlay) {
+        closeInviteInstitutionOverlay();
+      }
+    });
+  }
+
+  if (addInstitutionForm) {
+    addInstitutionForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setInviteInstitutionFormNotice("", "success");
+
+      const payload = collectInviteInstitutionFormPayload();
+      if (!payload.name) {
+        setInviteInstitutionFormNotice("Institution name is required.", "error");
+        return;
+      }
+
+      try {
+        const createdInstitution = await window.back4app.runCloudFunction("addInstitution", payload);
+        await refreshInviteInstitutionOptions(createdInstitution?.objectId || "");
+        closeInviteInstitutionOverlay();
+        setInviteUserNotice(`${payload.name} added and selected.`, "success");
+      } catch (error) {
+        const message = error?.message || "Unable to add institution right now.";
+        setInviteInstitutionFormNotice(message, "error");
+      }
+    });
+  }
 
   if (form) {
     form.addEventListener("submit", async (event) => {

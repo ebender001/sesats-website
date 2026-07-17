@@ -54,6 +54,16 @@
         </select>
       </label>
 
+      <div class="invite-institution-support">
+        <button
+          type="button"
+          id="open-invite-institution-overlay"
+          class="invite-institution-link"
+        >
+          Institution not listed? Add a new institution
+        </button>
+      </div>
+
       <label class="invite-user-label" for="invite-primary-specialty">Primary Specialty
         <select id="invite-primary-specialty" name="primarySpecialtyId" required disabled>
           <option value="">Loading specialties...</option>
@@ -117,3 +127,90 @@
     </div>
   </div>
 </section>
+
+<div id="invite-institution-overlay" class="institution-overlay hidden" aria-hidden="true">
+  <div class="institution-sheet" role="dialog" aria-modal="true" aria-labelledby="invite-institution-title">
+    <button
+      type="button"
+      class="institution-close"
+      id="close-invite-institution-overlay"
+      aria-label="Close add institution"
+    >
+      ×
+    </button>
+
+    <h3 id="invite-institution-title">Add Institution</h3>
+    <div
+      id="invite-institution-form-notice"
+      class="institution-form-notice hidden"
+      role="status"
+      aria-live="polite"
+    ></div>
+
+    <form id="invite-add-institution-form" class="institution-form">
+      <label class="institution-label" for="invite-institution-name">Name
+        <input id="invite-institution-name" name="name" type="text" required />
+      </label>
+
+      <label class="institution-label" for="invite-institution-city">City
+        <input id="invite-institution-city" name="city" type="text" />
+      </label>
+
+      <label class="institution-label" for="invite-institution-state">State
+        <input id="invite-institution-state" name="stateProvince" type="text" />
+      </label>
+
+      <label class="institution-label" for="invite-institution-type">Institution Type
+        <select id="invite-institution-type" name="institutionType">
+          <option value=""></option>
+          <option value="university_hospital">University Hospital</option>
+          <option value="academic_medical_center">Academic Medical Center</option>
+          <option value="teaching_hospital">Teaching Hospital</option>
+          <option value="community_hospital">Community Hospital</option>
+          <option value="regional_medical_center">Regional Medical Center</option>
+          <option value="tertiary_referral_center">Tertiary Referral Center</option>
+          <option value="quaternary_referral_center">Quaternary Referral Center</option>
+          <option value="veterans_hospital">Veterans Hospital</option>
+          <option value="military_hospital">Military Hospital</option>
+          <option value="childrens_hospital">Children's Hospital</option>
+          <option value="cancer_center">Cancer Center</option>
+          <option value="heart_hospital">Heart Hospital</option>
+          <option value="specialty_hospital">Specialty Hospital</option>
+          <option value="integrated_health_system">Integrated Health System</option>
+          <option value="private_hospital">Private Hospital</option>
+          <option value="public_hospital">Public Hospital</option>
+          <option value="government_hospital">Government Hospital</option>
+          <option value="research_institute">Research Institute</option>
+          <option value="medical_school">Medical School</option>
+          <option value="physician_practice">Physician Practice</option>
+          <option value="multispecialty_group">Multispecialty Group</option>
+          <option value="ambulatory_surgery_center">Ambulatory Surgery Center</option>
+          <option value="international_training_program">International Training Program</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+
+      <label class="institution-label" for="invite-institution-contact-email">Contact Email
+        <input id="invite-institution-contact-email" name="contactEmail" type="email" />
+      </label>
+
+      <label class="institution-label" for="invite-institution-website">Website
+        <input id="invite-institution-website" name="website" type="url" />
+      </label>
+
+      <label class="institution-checkbox">
+        <input id="invite-institution-active" name="isActive" type="checkbox" checked />
+        <span>Active institution</span>
+      </label>
+
+      <div class="institution-form-actions">
+        <button type="button" id="cancel-invite-add-institution" class="button button-secondary">
+          Cancel
+        </button>
+        <button type="submit" id="submit-invite-add-institution" class="button button-primary">
+          Add Institution
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
