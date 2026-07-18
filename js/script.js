@@ -2682,22 +2682,38 @@ async function openEditUserOverlay(user) {
   const overlay = document.getElementById("edit-user-overlay");
   if (!overlay || !user) return;
 
-  await ensureEditUserReferenceData();
-  renderEditUserInstitutionOptions(pageState.activeInstitutions);
-  renderEditUserSpecialtyOptions(pageState.activeSpecialties);
-
   document.getElementById("edit-user-object-id").value = user.objectId || "";
   document.getElementById("edit-user-display-name").value = user.displayName || "";
   document.getElementById("edit-user-username").value = user.username || "";
   document.getElementById("edit-user-email").value = user.email || "";
   document.getElementById("edit-user-credentials").value = user.credentials || "";
-  document.getElementById("edit-user-institution").value = user.institutionObjectId || "";
-  document.getElementById("edit-user-primary-specialty").value =
-    user.primarySpecialtyObjectId || "";
   setEditUserNotice("", "success");
 
   overlay.classList.remove("hidden");
   overlay.setAttribute("aria-hidden", "false");
+
+  renderEditUserInstitutionOptions(pageState.activeInstitutions);
+  renderEditUserSpecialtyOptions(pageState.activeSpecialties);
+
+  document.getElementById("edit-user-institution").value = user.institutionObjectId || "";
+  document.getElementById("edit-user-primary-specialty").value =
+    user.primarySpecialtyObjectId || "";
+
+  try {
+    await ensureEditUserReferenceData();
+    renderEditUserInstitutionOptions(pageState.activeInstitutions);
+    renderEditUserSpecialtyOptions(pageState.activeSpecialties);
+
+    document.getElementById("edit-user-institution").value = user.institutionObjectId || "";
+    document.getElementById("edit-user-primary-specialty").value =
+      user.primarySpecialtyObjectId || "";
+  } catch (error) {
+    console.error("Unable to load user edit reference data.", error);
+    setEditUserNotice(
+      error?.message || "Some edit options could not be loaded right now.",
+      "error"
+    );
+  }
 }
 
 function closeEditUserOverlay() {
