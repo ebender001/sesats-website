@@ -3221,7 +3221,9 @@ async function openQuestionEditorOverlay(questionId) {
   setPendingQuestionEditorId(questionId);
 
   try {
-    setQuestionEditorOverlayLoading("Loading Question", "Preparing the question editor.");
+    if (!pageState.questionEditorOverlayInitialized) {
+      setQuestionEditorOverlayLoading("Loading Question", "Preparing the question editor.");
+    }
     await initializeQuestionEditorOverlayShell();
 
     const question = await window.back4app.runCloudFunction("getQuestion", { objectId: questionId });
@@ -4070,12 +4072,33 @@ function bindQuestionsAddPage() {
 
   window.back4app
     .runCloudFunction("listSpecialties")
-    .then((specialties) => {
+    .then(async (specialties) => {
+      const specialtySelect = document.getElementById("add-question-specialty");
+      const topicSelect = document.getElementById("add-question-topic");
+      const preservedSpecialtyId = specialtySelect?.value || "";
+      const preservedTopicValue = topicSelect?.value || "";
       const activeSpecialties = (Array.isArray(specialties) ? specialties : []).filter(
         (specialty) => specialty?.isActive !== false
       );
       pageState.activeSpecialties = activeSpecialties;
       renderQuestionAddSpecialtyOptions(activeSpecialties);
+
+      if (specialtySelect && preservedSpecialtyId) {
+        specialtySelect.value = preservedSpecialtyId;
+        await loadQuestionTopicsForSpecialty(preservedSpecialtyId);
+
+        if (topicSelect && preservedTopicValue) {
+          const matchingTopicOption = Array.from(topicSelect.options || []).find(
+            (option) => normalizeLookupText(option.value) === normalizeLookupText(preservedTopicValue)
+          );
+
+          if (matchingTopicOption) {
+            topicSelect.value = matchingTopicOption.value;
+          }
+        }
+        return;
+      }
+
       renderQuestionAddTopicOptions([], { placeholder: "Select a specialty first" });
     })
     .catch((error) => {
