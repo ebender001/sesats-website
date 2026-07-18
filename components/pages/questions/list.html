@@ -61,6 +61,7 @@
 
     <div class="question-table-shell">
     <div class="question-list-header">
+      <span class="question-actions-heading">Edit</span>
       <span>Created At</span>
       <span>Specialty</span>
       <span>Section</span>
@@ -69,7 +70,6 @@
       <span>Editor Status</span>
       <span>Last Reviewed</span>
       <span>Last Updated</span>
-      <span class="question-actions-heading">Edit</span>
     </div>
 
     <div id="questions-list" class="question-list-body">
@@ -89,4 +89,25 @@
     <h2 id="question-stem-title">Question Stem</h2>
     <p id="question-stem-body" class="question-stem-body"></p>
   </div>
+</div>
+
+<div id="question-edit-overlay" class="question-bank-preview-overlay hidden" aria-hidden="true">
+  <aside
+    id="question-edit-drawer"
+    class="question-bank-preview-drawer question-edit-overlay-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="question-edit-overlay-title"
+  >
+    <div id="question-edit-overlay-content" class="question-bank-preview-content">
+      <div class="question-bank-preview-header">
+        <div>
+          <p class="question-bank-preview-eyebrow">ABTS SESATS Administration</p>
+          <h3 id="question-edit-overlay-title">Loading Question</h3>
+          <p class="question-bank-preview-subtitle">Preparing the question editor.</p>
+        </div>
+        <button type="button" class="login-close" id="question-edit-overlay-close" aria-label="Dismiss question editor">×</button>
+      </div>
+    </div>
+  </aside>
 </div>

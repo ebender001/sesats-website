@@ -44,7 +44,45 @@ const pageState = {
   specialtiesLoaded: false,
   questionAiMetadata: null,
   questionMediaSelections: {},
+  currentEditQuestion: null,
+  questionEditorOriginalSnapshot: "",
+  questionEditorOverlayInitialized: false,
 };
+
+function syncAuthStateFromParseUser() {
+  if (typeof Parse === "undefined" || typeof Parse.User?.current !== "function") {
+    return;
+  }
+
+  const currentUser = Parse.User.current();
+  if (!currentUser) {
+    authState.loggedIn = false;
+    authState.userName = "Admin User";
+    authState.userRole = "Administrator";
+    return;
+  }
+
+  const displayName = String(
+    currentUser.get?.("displayName") ||
+      currentUser.attributes?.displayName ||
+      currentUser.get?.("name") ||
+      currentUser.attributes?.name ||
+      currentUser.get?.("username") ||
+      currentUser.getUsername?.() ||
+      ""
+  ).trim();
+  const credentials = String(
+    currentUser.get?.("credentials") ||
+      currentUser.attributes?.credentials ||
+      currentUser.get?.("roleName") ||
+      currentUser.attributes?.roleName ||
+      "Administrator"
+  ).trim();
+
+  authState.loggedIn = true;
+  authState.userName = displayName || "Admin User";
+  authState.userRole = credentials || "Administrator";
+}
 
 function getMainSection(section) {
   if (section.startsWith("users-")) {
@@ -136,7 +174,7 @@ function renderHeaderAuth() {
   actionButton.setAttribute("aria-expanded", "false");
 
   if (dropdown) {
-    dropdown.classList.toggle("hidden", !authState.loggedIn);
+    dropdown.classList.add("hidden");
   }
 
   if (editProfileLink) {
@@ -455,6 +493,22 @@ function setUsersFeedback(message, type) {
   feedback.textContent = message;
   feedback.classList.remove("hidden", "success", "error");
   feedback.classList.add(type === "success" ? "success" : "error");
+}
+
+function setEditUserNotice(message, type) {
+  const notice = document.getElementById("edit-user-notice");
+  if (!notice) return;
+
+  if (!message) {
+    notice.textContent = "";
+    notice.classList.add("hidden");
+    notice.classList.remove("success", "error");
+    return;
+  }
+
+  notice.textContent = message;
+  notice.classList.remove("hidden", "success", "error");
+  notice.classList.add(type === "success" ? "success" : "error");
 }
 
 function setInviteUserNotice(message, type) {
@@ -861,7 +915,24 @@ function setQuestionSaveSubmitting(isSubmitting) {
 }
 
 function buildQuestionEditUrl(objectId) {
-  return `edit.html?id=${encodeURIComponent(objectId)}`;
+  return `index.html?editQuestionId=${encodeURIComponent(objectId)}#questions-list`;
+}
+
+function getPendingQuestionEditorId() {
+  const params = new URLSearchParams(window.location.search);
+  return String(params.get("editQuestionId") || "").trim();
+}
+
+function setPendingQuestionEditorId(questionId) {
+  const url = new URL(window.location.href);
+
+  if (questionId) {
+    url.searchParams.set("editQuestionId", questionId);
+  } else {
+    url.searchParams.delete("editQuestionId");
+  }
+
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function formatQuestionListDate(value) {
@@ -2549,6 +2620,110 @@ function renderUserRows(users) {
     .join("");
 }
 
+function renderEditUserInstitutionOptions(institutions) {
+  const select = document.getElementById("edit-user-institution");
+  if (!select) return;
+
+  if (!Array.isArray(institutions) || institutions.length === 0) {
+    select.innerHTML = '<option value="">No active institutions available</option>';
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  select.innerHTML = [
+    '<option value=""></option>',
+    ...institutions.map((institution) => {
+      const label = institution.name || "Unnamed Institution";
+      return `<option value="${escapeHtml(institution.objectId || "")}">${escapeHtml(label)}</option>`;
+    }),
+  ].join("");
+}
+
+function renderEditUserSpecialtyOptions(specialties) {
+  const select = document.getElementById("edit-user-primary-specialty");
+  if (!select) return;
+
+  if (!Array.isArray(specialties) || specialties.length === 0) {
+    select.innerHTML = '<option value="">No active specialties available</option>';
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  select.innerHTML = [
+    '<option value=""></option>',
+    ...specialties.map((specialty) => {
+      const label = specialty.name || "Unnamed Specialty";
+      return `<option value="${escapeHtml(specialty.objectId || "")}">${escapeHtml(label)}</option>`;
+    }),
+  ].join("");
+}
+
+async function ensureEditUserReferenceData() {
+  if (!pageState.institutionsLoaded) {
+    const institutions = await window.back4app.runCloudFunction("listInstitutions");
+    pageState.activeInstitutions = (Array.isArray(institutions) ? institutions : []).filter(
+      (institution) => institution?.isActive !== false
+    );
+    pageState.institutionsLoaded = true;
+  }
+
+  if (!pageState.specialtiesLoaded) {
+    const specialties = await window.back4app.runCloudFunction("listSpecialties");
+    pageState.activeSpecialties = (Array.isArray(specialties) ? specialties : []).filter(
+      (specialty) => specialty?.isActive !== false
+    );
+    pageState.specialtiesLoaded = true;
+  }
+}
+
+async function openEditUserOverlay(user) {
+  const overlay = document.getElementById("edit-user-overlay");
+  if (!overlay || !user) return;
+
+  await ensureEditUserReferenceData();
+  renderEditUserInstitutionOptions(pageState.activeInstitutions);
+  renderEditUserSpecialtyOptions(pageState.activeSpecialties);
+
+  document.getElementById("edit-user-object-id").value = user.objectId || "";
+  document.getElementById("edit-user-display-name").value = user.displayName || "";
+  document.getElementById("edit-user-username").value = user.username || "";
+  document.getElementById("edit-user-email").value = user.email || "";
+  document.getElementById("edit-user-credentials").value = user.credentials || "";
+  document.getElementById("edit-user-institution").value = user.institutionObjectId || "";
+  document.getElementById("edit-user-primary-specialty").value =
+    user.primarySpecialtyObjectId || "";
+  setEditUserNotice("", "success");
+
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+function closeEditUserOverlay() {
+  const overlay = document.getElementById("edit-user-overlay");
+  const form = document.getElementById("edit-user-form");
+  if (!overlay) return;
+
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  if (form) {
+    form.reset();
+  }
+  setEditUserNotice("", "success");
+}
+
+function collectEditUserPayload() {
+  return {
+    objectId: document.getElementById("edit-user-object-id")?.value || "",
+    displayName: document.getElementById("edit-user-display-name")?.value.trim() || "",
+    credentials: document.getElementById("edit-user-credentials")?.value.trim() || "",
+    institutionId: document.getElementById("edit-user-institution")?.value.trim() || "",
+    primarySpecialtyId:
+      document.getElementById("edit-user-primary-specialty")?.value.trim() || "",
+  };
+}
+
 function compareQuestionOrder(leftQuestion, rightQuestion) {
   const leftOrder = getQuestionOrderValue(leftQuestion);
   const rightOrder = getQuestionOrderValue(rightQuestion);
@@ -2668,7 +2843,396 @@ function updateQuestionListFooter(totalMatchingCount, displayedCount) {
 
 function navigateToQuestionEditor(questionId) {
   if (!questionId) return;
+  const overlay = document.getElementById("question-edit-overlay");
+  if (overlay) {
+    void openQuestionEditorOverlay(questionId);
+    return;
+  }
+
   window.location.href = buildQuestionEditUrl(questionId);
+}
+
+function setQuestionEditorOverlayLoading(title, message) {
+  const content = document.getElementById("question-edit-overlay-content");
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="question-bank-preview-header">
+      <div>
+        <p class="question-bank-preview-eyebrow">ABTS SESATS Administration</p>
+        <h3 id="question-edit-overlay-title">${escapeHtml(title)}</h3>
+        <p class="question-bank-preview-subtitle">${escapeHtml(message)}</p>
+      </div>
+      <button type="button" class="login-close" id="question-edit-overlay-close" aria-label="Dismiss question editor">×</button>
+    </div>
+  `;
+}
+
+function inferEditableQuestionType(questionOptions) {
+  const normalizedOptions = Array.isArray(questionOptions) ? questionOptions : [];
+  if (normalizedOptions.length !== 2) {
+    return QUESTION_TYPE_MULTIPLE_CHOICE;
+  }
+
+  const optionTexts = normalizedOptions.map((option) => String(option?.text || "").trim().toLowerCase());
+  return optionTexts[0] === "true" && optionTexts[1] === "false"
+    ? QUESTION_TYPE_TRUE_FALSE
+    : QUESTION_TYPE_MULTIPLE_CHOICE;
+}
+
+function buildEditableQuestionOption(option) {
+  return createQuestionOption({
+    objectId: String(option?.objectId || ""),
+    text: String(option?.text || ""),
+    isCorrect: Boolean(option?.isCorrect),
+    locked: false,
+  });
+}
+
+function ensureEditableQuestionMinimumOptions(questionType) {
+  if (!pageState.questionEditor) return;
+
+  if (questionType === QUESTION_TYPE_TRUE_FALSE) {
+    pageState.questionEditor.options = buildTrueFalseOptions().map((option, index) => ({
+      ...option,
+      objectId: String(pageState.questionEditor.options[index]?.objectId || ""),
+      isCorrect: Boolean(pageState.questionEditor.options[index]?.isCorrect),
+    }));
+    return;
+  }
+
+  while (pageState.questionEditor.options.length < 3) {
+    pageState.questionEditor.options.push(createQuestionOption());
+  }
+}
+
+function replaceQuestionEditorOverlaySaveButton() {
+  const existingButton = document.getElementById("save-question-button");
+  if (!existingButton || !existingButton.parentNode) return null;
+
+  const nextButton = existingButton.cloneNode(true);
+  nextButton.textContent = "Save Changes";
+  nextButton.dataset.idleLabel = "Save Changes";
+  nextButton.dataset.loadingLabel = "Saving Changes...";
+  existingButton.parentNode.replaceChild(nextButton, existingButton);
+  return nextButton;
+}
+
+function setQuestionEditorOverlaySubmitting(isSubmitting) {
+  const button = document.getElementById("save-question-button");
+  if (!button) return;
+
+  button.disabled = isSubmitting;
+  button.textContent = isSubmitting
+    ? button.dataset.loadingLabel || "Saving..."
+    : button.dataset.idleLabel || "Save";
+}
+
+function collectQuestionEditPayload() {
+  const basePayload = collectQuestionAddPayload();
+  return {
+    objectId: pageState.currentEditQuestion.objectId,
+    stem: basePayload.stem,
+    critique: basePayload.critique,
+    specialty: basePayload.specialty,
+    topic: basePayload.topic,
+    difficulty: basePayload.difficulty,
+    status: basePayload.status,
+    generatedByAI: basePayload.generatedByAI,
+    aiModel: basePayload.aiModel,
+    aiPromptVersion: basePayload.aiPromptVersion,
+    lastEditedByObjectId: basePayload.lastEditedByObjectId,
+    lastEditedAt: basePayload.lastEditedAt,
+  };
+}
+
+function collectEditableQuestionOptionPayloads() {
+  const relevantOptions =
+    pageState.questionEditor.questionType === QUESTION_TYPE_TRUE_FALSE
+      ? pageState.questionEditor.options
+      : pageState.questionEditor.options.filter((option) => option.text.trim().length > 0);
+
+  return relevantOptions.map((option, index) => ({
+    objectId: String(option.objectId || ""),
+    label: getQuestionOptionLabel(index),
+    text: option.text.trim(),
+    isCorrect: Boolean(option.isCorrect),
+    sortOrder: index,
+  }));
+}
+
+function buildQuestionEditorOverlaySnapshot() {
+  const payload = collectQuestionEditPayload();
+  const options = collectEditableQuestionOptionPayloads().map((option) => ({
+    label: option.label,
+    text: option.text,
+    isCorrect: option.isCorrect,
+    sortOrder: option.sortOrder,
+  }));
+
+  return JSON.stringify({
+    stem: payload.stem,
+    critique: payload.critique,
+    specialty: payload.specialty,
+    topic: payload.topic,
+    difficulty: payload.difficulty,
+    status: payload.status,
+    questionType: pageState.questionEditor?.questionType || QUESTION_TYPE_MULTIPLE_CHOICE,
+    options,
+  });
+}
+
+function updateQuestionEditorOverlayDirtyState() {
+  const button = document.getElementById("save-question-button");
+  if (!button) return;
+
+  const isDirty =
+    Boolean(pageState.questionEditorOriginalSnapshot) &&
+    buildQuestionEditorOverlaySnapshot() !== pageState.questionEditorOriginalSnapshot;
+  button.disabled = !isDirty;
+}
+
+function bindQuestionEditorOverlayDirtyState() {
+  const form = document.getElementById("add-question-form");
+  if (!form) return;
+
+  form.addEventListener("input", () => {
+    updateQuestionEditorOverlayDirtyState();
+  });
+
+  form.addEventListener("change", () => {
+    updateQuestionEditorOverlayDirtyState();
+  });
+
+  form.addEventListener("click", () => {
+    window.setTimeout(updateQuestionEditorOverlayDirtyState, 0);
+  });
+}
+
+function closeQuestionEditorOverlay() {
+  const overlay = document.getElementById("question-edit-overlay");
+  if (!overlay) return;
+
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  setPendingQuestionEditorId("");
+  pageState.currentEditQuestion = null;
+  pageState.questionEditorOriginalSnapshot = "";
+}
+
+async function initializeQuestionEditorOverlayShell() {
+  const overlayContent = document.getElementById("question-edit-overlay-content");
+  if (!overlayContent) {
+    throw new Error("Question editor overlay container is unavailable.");
+  }
+
+  if (pageState.questionEditorOverlayInitialized) {
+    return;
+  }
+
+  const markup = await fetchComponentMarkup("components/pages/questions/add.html");
+  overlayContent.innerHTML = markup;
+
+  const pageTitle = overlayContent.querySelector(".page-title h2");
+  const cardTitle = overlayContent.querySelector(".invite-user-intro h3");
+  const cardDescription = overlayContent.querySelector(".invite-user-intro p:last-child");
+  const importActions = overlayContent.querySelector(".question-form-actions");
+  const questionImagesLabel = overlayContent.querySelector('label[for="add-question-images"]');
+  const questionVideosLabel = overlayContent.querySelector('label[for="add-question-videos"]');
+  const critiqueImagesLabel = overlayContent.querySelector('label[for="add-question-critique-images"]');
+  const critiqueVideosLabel = overlayContent.querySelector('label[for="add-question-critique-videos"]');
+  const referencesPanel = overlayContent.querySelector(".question-references-panel");
+
+  if (pageTitle) pageTitle.textContent = "Edit Question";
+  if (cardTitle) cardTitle.textContent = "Question Editor";
+  if (cardDescription) {
+    cardDescription.textContent = "Review and update the selected question.";
+  }
+  if (importActions) {
+    importActions.innerHTML =
+      '<button type="button" class="login-close" id="question-edit-dismiss-button" aria-label="Dismiss question editor">×</button>';
+  }
+
+  [questionImagesLabel, questionVideosLabel, critiqueImagesLabel, critiqueVideosLabel, referencesPanel].forEach(
+    (element) => {
+      if (element) {
+        element.remove();
+      }
+    }
+  );
+
+  bindQuestionsAddPage();
+  replaceQuestionEditorOverlaySaveButton()?.addEventListener("click", () => {
+    void saveQuestionEditorOverlay();
+  });
+  bindQuestionEditorOverlayDirtyState();
+
+  pageState.questionEditorOverlayInitialized = true;
+}
+
+async function populateQuestionEditorOverlay(question) {
+  const specialtySelect = document.getElementById("add-question-specialty");
+  const topicSelect = document.getElementById("add-question-topic");
+  const statusSelect = document.getElementById("add-question-status");
+  const difficultySelect = document.getElementById("add-question-difficulty");
+  const stemTextarea = document.getElementById("add-question-stem");
+  const critiqueTextarea = document.getElementById("add-question-critique");
+  const typeSelect = document.getElementById("add-question-type");
+
+  const inferredQuestionType = inferEditableQuestionType(question.questionOptions);
+  const specialty = findSpecialtyByName(question.specialty || "");
+
+  if (specialtySelect && specialty?.objectId) {
+    specialtySelect.value = specialty.objectId;
+    await loadQuestionTopicsForSpecialty(specialty.objectId);
+    setQuestionTopicCreatorState({ visible: true, enabled: true });
+  }
+
+  if (topicSelect) {
+    const matchingTopicOption = Array.from(topicSelect.options || []).find(
+      (option) => normalizeLookupText(option.value) === normalizeLookupText(question.topic || "")
+    );
+
+    if (matchingTopicOption) {
+      topicSelect.value = matchingTopicOption.value;
+    } else if (question.topic) {
+      const option = document.createElement("option");
+      option.value = String(question.topic);
+      option.textContent = String(question.topic);
+      topicSelect.appendChild(option);
+      topicSelect.value = option.value;
+      topicSelect.disabled = false;
+    }
+  }
+
+  if (statusSelect) {
+    statusSelect.value = String(question.status || "");
+    applyQuestionStatusAccent(statusSelect.value);
+  }
+
+  if (difficultySelect) {
+    difficultySelect.value = String(question.difficulty || "Average");
+  }
+
+  if (stemTextarea) {
+    stemTextarea.value = String(question.stem || "");
+    bindAutoResizingTextarea(stemTextarea);
+  }
+
+  if (critiqueTextarea) {
+    critiqueTextarea.value = String(question.critique || "");
+    bindAutoResizingTextarea(critiqueTextarea);
+  }
+
+  if (typeSelect) {
+    typeSelect.value = inferredQuestionType;
+  }
+
+  pageState.questionEditor.questionType = inferredQuestionType;
+  pageState.questionEditor.options = (Array.isArray(question.questionOptions) ? question.questionOptions : []).map(
+    buildEditableQuestionOption
+  );
+  ensureEditableQuestionMinimumOptions(inferredQuestionType);
+  renderQuestionOptionsEditor();
+}
+
+async function saveQuestionEditorOverlay() {
+  const questionPayload = collectQuestionEditPayload();
+  const validationMessage = validateQuestionAddPayload(questionPayload);
+  if (validationMessage) {
+    setQuestionsFeedback(validationMessage, "error");
+    return;
+  }
+
+  const previousQuestion = pageState.currentEditQuestion || {};
+  const nextOptions = collectEditableQuestionOptionPayloads();
+  const previousOptionIds = new Set(
+    (Array.isArray(previousQuestion.questionOptions) ? previousQuestion.questionOptions : [])
+      .map((option) => String(option?.objectId || ""))
+      .filter(Boolean)
+  );
+  const retainedOptionIds = new Set(nextOptions.map((option) => option.objectId).filter(Boolean));
+  const deletedOptionIds = [...previousOptionIds].filter((optionId) => !retainedOptionIds.has(optionId));
+
+  setQuestionsFeedback("", "success");
+  setQuestionEditorOverlaySubmitting(true);
+
+  try {
+    const updatedQuestion = await window.back4app.runCloudFunction("editQuestion", questionPayload);
+    const savedOptions = [];
+
+    for (const optionPayload of nextOptions) {
+      if (optionPayload.objectId) {
+        const savedOption = await window.back4app.runCloudFunction("editQuestionOption", optionPayload);
+        savedOptions.push(savedOption);
+      } else {
+        const savedOption = await window.back4app.runCloudFunction("addQuestionOption", {
+          ...optionPayload,
+          questionObjectId: updatedQuestion.objectId,
+        });
+        savedOptions.push(savedOption);
+      }
+    }
+
+    for (const optionId of deletedOptionIds) {
+      await window.back4app.runCloudFunction("deleteQuestionOption", { objectId: optionId });
+    }
+
+    pageState.currentEditQuestion = {
+      ...updatedQuestion,
+      questionOptions: savedOptions,
+    };
+
+    await fetchQuestions();
+    await populateQuestionEditorOverlay(pageState.currentEditQuestion);
+    pageState.questionEditorOriginalSnapshot = buildQuestionEditorOverlaySnapshot();
+    updateQuestionEditorOverlayDirtyState();
+    setQuestionsFeedback("Question updated successfully.", "success");
+  } catch (error) {
+    console.error("Unable to update question.", error);
+    setQuestionsFeedback(error?.message || "Unable to save question changes right now.", "error");
+  } finally {
+    setQuestionEditorOverlaySubmitting(false);
+  }
+}
+
+async function openQuestionEditorOverlay(questionId) {
+  const overlay = document.getElementById("question-edit-overlay");
+  if (!overlay) return;
+
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  setPendingQuestionEditorId(questionId);
+
+  try {
+    setQuestionEditorOverlayLoading("Loading Question", "Preparing the question editor.");
+    await initializeQuestionEditorOverlayShell();
+
+    const question = await window.back4app.runCloudFunction("getQuestion", { objectId: questionId });
+    pageState.currentEditQuestion = question;
+    await populateQuestionEditorOverlay(question);
+    pageState.questionEditorOriginalSnapshot = buildQuestionEditorOverlaySnapshot();
+    updateQuestionEditorOverlayDirtyState();
+
+    const dismissButton = document.getElementById("question-edit-dismiss-button");
+    if (dismissButton) {
+      dismissButton.onclick = () => {
+        closeQuestionEditorOverlay();
+      };
+    }
+  } catch (error) {
+    console.error("Unable to open question editor overlay.", error);
+    setQuestionEditorOverlayLoading(
+      "Unable To Load Question",
+      error?.message || "Please try again."
+    );
+    const closeButton = document.getElementById("question-edit-overlay-close");
+    if (closeButton) {
+      closeButton.onclick = () => {
+        closeQuestionEditorOverlay();
+      };
+    }
+  }
 }
 
 function renderQuestionRows() {
@@ -2703,6 +3267,17 @@ function renderQuestionRows() {
 
       return `
         <div class="question-row" data-question-id="${objectId}" tabindex="0" role="link" aria-label="Open question created ${createdAt}">
+          <span class="question-actions-cell">
+            <button
+              type="button"
+              class="question-edit-button"
+              data-question-id="${objectId}"
+              aria-label="Edit question created ${createdAt}"
+              title="Edit question"
+            >
+              ✎
+            </button>
+          </span>
           <span class="question-date">${createdAt}</span>
           <span class="question-specialty">${specialty}</span>
           <span class="question-section">${section}</span>
@@ -2718,17 +3293,6 @@ function renderQuestionRows() {
           <span class="question-status-badge ${statusClass}">${editorStatus}</span>
           <span class="question-date">${lastReviewedAt}</span>
           <span class="question-date">${updatedAt}</span>
-          <span class="question-actions-cell">
-            <button
-              type="button"
-              class="question-edit-button"
-              data-question-id="${objectId}"
-              aria-label="Edit question created ${createdAt}"
-              title="Edit question"
-            >
-              ✎
-            </button>
-          </span>
         </div>
       `;
     })
@@ -2970,6 +3534,10 @@ function bindInstitutionsListPage() {
 function bindUsersListPage() {
   const sortButton = document.getElementById("user-display-name-sort");
   const list = document.getElementById("users-list");
+  const editOverlay = document.getElementById("edit-user-overlay");
+  const closeEditButton = document.getElementById("close-edit-user");
+  const cancelEditButton = document.getElementById("cancel-edit-user");
+  const editForm = document.getElementById("edit-user-form");
 
   setUsersFeedback("", "success");
 
@@ -2987,8 +3555,64 @@ function bindUsersListPage() {
 
       const userId = editButton.dataset.userId;
       const user = pageState.usersById.get(userId);
-      const displayName = user?.displayName || "this user";
-      setUsersFeedback(`Edit user for ${displayName} is coming soon.`, "success");
+      if (user) {
+        void openEditUserOverlay(user).catch((error) => {
+          console.error("Unable to open edit user overlay.", error);
+          setUsersFeedback(error?.message || "Unable to open edit user right now.", "error");
+        });
+      }
+    });
+  }
+
+  [closeEditButton, cancelEditButton].forEach((button) => {
+    if (!button) return;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeEditUserOverlay();
+    });
+  });
+
+  if (editOverlay) {
+    editOverlay.addEventListener("click", (event) => {
+      if (event.target === editOverlay) {
+        closeEditUserOverlay();
+      }
+    });
+  }
+
+  if (editForm) {
+    editForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setEditUserNotice("", "success");
+
+      const payload = collectEditUserPayload();
+      if (!payload.objectId || !payload.displayName) {
+        setEditUserNotice("Display name is required.", "error");
+        return;
+      }
+      if (!payload.credentials) {
+        setEditUserNotice("Credentials are required.", "error");
+        return;
+      }
+      if (!payload.institutionId) {
+        setEditUserNotice("Institution is required.", "error");
+        return;
+      }
+      if (!payload.primarySpecialtyId) {
+        setEditUserNotice("Primary specialty is required.", "error");
+        return;
+      }
+
+      try {
+        const updatedUser = await window.back4app.runCloudFunction("editUser", payload);
+        setUsersFeedback(`Updated ${updatedUser?.displayName || payload.displayName}.`, "success");
+        await fetchUsers();
+        closeEditUserOverlay();
+      } catch (error) {
+        const message = error?.message || "Unable to update user right now.";
+        setEditUserNotice(message, "error");
+        setUsersFeedback(message, "error");
+      }
     });
   }
 
@@ -3006,6 +3630,8 @@ function bindQuestionsListPage() {
   const loadMoreButton = document.getElementById("questions-load-more");
   const stemOverlay = document.getElementById("question-stem-overlay");
   const stemOverlayClose = document.getElementById("question-stem-close");
+  const questionEditOverlay = document.getElementById("question-edit-overlay");
+  const questionEditOverlayClose = document.getElementById("question-edit-overlay-close");
 
   setQuestionsFeedback("", "success");
   pageState.questionVisibleCount = 100;
@@ -3095,7 +3721,32 @@ function bindQuestionsListPage() {
     });
   }
 
-  fetchQuestions();
+  if (questionEditOverlayClose) {
+    questionEditOverlayClose.addEventListener("click", () => {
+      closeQuestionEditorOverlay();
+    });
+  }
+
+  if (questionEditOverlay) {
+    questionEditOverlay.addEventListener("click", (event) => {
+      if (event.target === questionEditOverlay) {
+        closeQuestionEditorOverlay();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && questionEditOverlay && !questionEditOverlay.classList.contains("hidden")) {
+      closeQuestionEditorOverlay();
+    }
+  });
+
+  void fetchQuestions().then(() => {
+    const pendingQuestionId = getPendingQuestionEditorId();
+    if (pendingQuestionId) {
+      void openQuestionEditorOverlay(pendingQuestionId);
+    }
+  });
 }
 
 function bindQuestionsAddPage() {
@@ -3731,6 +4382,8 @@ function bindNavLinks() {
 }
 
 async function loadPageComponents() {
+  syncAuthStateFromParseUser();
+
   await Promise.all([
     loadComponent("header-placeholder", "components/header.html"),
     loadComponent("nav-placeholder", "components/nav.html"),

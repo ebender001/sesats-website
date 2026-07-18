@@ -1191,15 +1191,15 @@ body.nav-panel-open .nav-shell {
 .question-row {
   display: grid;
   grid-template-columns:
-    minmax(116px, 0.95fr)
-    minmax(120px, 0.9fr)
-    minmax(120px, 0.9fr)
-    minmax(360px, 3fr)
-    minmax(110px, 0.8fr)
+    minmax(64px, 0.8fr)
+    minmax(120px, 1.1fr)
+    minmax(110px, 1fr)
+    minmax(100px, 0.9fr)
+    minmax(420px, 4.5fr)
+    minmax(110px, 0.9fr)
     minmax(120px, 0.9fr)
     minmax(110px, 0.9fr)
-    minmax(110px, 0.9fr)
-    64px;
+    minmax(110px, 1fr);
   gap: 14px;
   align-items: center;
   padding: 14px 18px;
@@ -2771,6 +2771,10 @@ body.nav-panel-open .nav-shell {
   background: #ffffff;
   box-shadow: -24px 0 48px rgba(9, 32, 68, 0.14);
   overflow-y: auto;
+}
+
+.question-edit-overlay-drawer {
+  width: min(100%, 960px);
 }
 
 .question-bank-preview-content {

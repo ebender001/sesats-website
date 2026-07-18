@@ -19,3 +19,65 @@
     <div class="user-list-message">Loading users...</div>
   </div>
 </section>
+
+<div id="edit-user-overlay" class="institution-overlay hidden" aria-hidden="true">
+  <div class="institution-sheet" role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
+    <button
+      type="button"
+      class="institution-close"
+      id="close-edit-user"
+      aria-label="Close edit user"
+    >
+      ×
+    </button>
+
+    <h3 id="edit-user-title">Edit User</h3>
+    <div id="edit-user-notice" class="institution-form-notice hidden" role="status"></div>
+
+    <form id="edit-user-form" class="institution-form">
+      <input id="edit-user-object-id" name="objectId" type="hidden" />
+
+      <label class="institution-label" for="edit-user-display-name">Display Name
+        <input id="edit-user-display-name" name="displayName" type="text" required />
+      </label>
+
+      <label class="institution-label" for="edit-user-username">Username
+        <input id="edit-user-username" name="username" type="text" readonly />
+      </label>
+
+      <label class="institution-label" for="edit-user-email">Email
+        <input id="edit-user-email" name="email" type="email" readonly />
+      </label>
+
+      <label class="institution-label" for="edit-user-credentials">Credentials
+        <select id="edit-user-credentials" name="credentials" required>
+          <option value=""></option>
+          <option value="MD">MD</option>
+          <option value="DO">DO</option>
+          <option value="PhD">PhD</option>
+          <option value="PA">PA</option>
+          <option value="NP">NP</option>
+          <option value="RN">RN</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+
+      <label class="institution-label" for="edit-user-institution">Institution
+        <select id="edit-user-institution" name="institutionId" required disabled>
+          <option value="">Loading institutions...</option>
+        </select>
+      </label>
+
+      <label class="institution-label" for="edit-user-primary-specialty">Primary Specialty
+        <select id="edit-user-primary-specialty" name="primarySpecialtyId" required disabled>
+          <option value="">Loading specialties...</option>
+        </select>
+      </label>
+
+      <div class="institution-form-actions">
+        <button type="button" id="cancel-edit-user" class="button button-secondary">Cancel</button>
+        <button type="submit" id="submit-edit-user" class="button button-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -148,14 +148,6 @@
         iconTone: "slate",
       },
       {
-        key: "questionsWithoutReferences",
-        label: "Without References",
-        value: kpis.questionsWithoutReferences,
-        subtitle: "Questions missing linked citations",
-        icon: "⌷",
-        iconTone: "red",
-      },
-      {
         key: "questionsWithMedia",
         label: "With Media",
         value: kpis.questionsWithMedia,
@@ -164,27 +156,11 @@
         iconTone: "purple",
       },
       {
-        key: "totalReferences",
-        label: "Total References",
-        value: kpis.totalReferences,
-        subtitle: "All reference rows in scope",
-        icon: "⋈",
-        iconTone: "blue",
-      },
-      {
         key: "referenceYearRange",
         label: "Reference Year Range",
         value: kpis.referenceYearRange,
         subtitle: "Earliest to latest reference publication year",
         icon: "◷",
-        iconTone: "blue",
-      },
-      {
-        key: "institutions",
-        label: "Institutions",
-        value: kpis.institutions,
-        subtitle: "Institution records in scope",
-        icon: "⌂",
         iconTone: "blue",
       },
       {
