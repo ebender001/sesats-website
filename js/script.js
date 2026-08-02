@@ -13,6 +13,13 @@ const VALID_SECTIONS = new Set([
   "questions-list",
   "content",
   "reports",
+  "reports-workflow",
+  "reports-question-bank",
+  "reports-editorial",
+  "reports-ai",
+  "reports-activity-log",
+  "reports-audit-log",
+  "reports-export-center",
   "settings",
 ]);
 
@@ -93,6 +100,10 @@ function getMainSection(section) {
     return "institutions";
   }
 
+  if (section.startsWith("reports-")) {
+    return "reports";
+  }
+
   return section.startsWith("questions-") ? "questions" : section;
 }
 
@@ -110,6 +121,7 @@ function getPagePath(section) {
   if (section === "content") return "components/pages/content/index.html";
   if (section === "dev-tools") return "components/pages/dev-tools/index.html";
   if (section === "reports") return "components/pages/reports/index.html";
+  if (section.startsWith("reports-")) return "components/pages/reports/index.html";
   if (section === "settings") return "components/pages/settings/index.html";
   return `components/pages/${section}.html`;
 }
@@ -4257,6 +4269,10 @@ function initializeSection(section) {
     bindDevToolsPage();
   }
 
+  if (section === "reports" || section.startsWith("reports-")) {
+    void window.bindWorkflowReportPage?.(section);
+  }
+
   if (section === "questions-add") {
     bindQuestionsAddPage();
   }
@@ -4380,11 +4396,10 @@ function bindNavLinks() {
       const parentNavItem = link.closest(".nav-item-has-submenu");
 
       if (parentNavItem && link.classList.contains("nav-link")) {
-        if (!parentNavItem.classList.contains("is-open")) {
-          closeAllDropdowns();
-          parentNavItem.classList.add("is-open");
-          return;
-        }
+        const isOpen = parentNavItem.classList.contains("is-open");
+        closeAllDropdowns();
+        if (!isOpen) parentNavItem.classList.add("is-open");
+        return;
       }
 
       await navigateToSection(section);

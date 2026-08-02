@@ -76,14 +76,26 @@
       </span>
       <span>Content</span>
     </a>
-    <a href="#reports" class="nav-link" data-section="reports">
-      <span class="nav-link-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
-          <path d="M5 19.5h14M8 17V11M12 17V7M16 17v-4" />
-        </svg>
-      </span>
-      <span>Reports</span>
-    </a>
+    <div class="nav-item nav-item-has-submenu">
+      <a href="#reports" class="nav-link nav-link-has-submenu" data-section="reports">
+        <span class="nav-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
+            <path d="M5 19.5h14M8 17V11M12 17V7M16 17v-4" />
+          </svg>
+        </span>
+        <span>Reports</span>
+        <span class="nav-link-caret" aria-hidden="true">▾</span>
+      </a>
+      <nav class="nav-dropdown" id="reports-subnav" aria-label="Reports submenu">
+        <a href="#reports-workflow" class="sub-nav-link" data-section="reports-workflow">Workflow Reports</a>
+        <a href="#reports-question-bank" class="sub-nav-link" data-section="reports-question-bank">Question Bank Reports</a>
+        <a href="#reports-editorial" class="sub-nav-link" data-section="reports-editorial">Editorial Reports</a>
+        <a href="#reports-ai" class="sub-nav-link" data-section="reports-ai">AI Reports</a>
+        <a href="#reports-activity-log" class="sub-nav-link" data-section="reports-activity-log">Activity Log</a>
+        <a href="#reports-audit-log" class="sub-nav-link" data-section="reports-audit-log">Audit Log</a>
+        <a href="#reports-export-center" class="sub-nav-link" data-section="reports-export-center">Export Center</a>
+      </nav>
+    </div>
     <a href="#settings" class="nav-link" data-section="settings">
       <span class="nav-link-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" class="nav-link-icon-symbol">
