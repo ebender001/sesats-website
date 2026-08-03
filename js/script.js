@@ -4273,6 +4273,10 @@ function initializeSection(section) {
     void window.bindWorkflowReportPage?.(section);
   }
 
+  if (section === "settings") {
+    void window.bindSettingsPage?.();
+  }
+
   if (section === "questions-add") {
     bindQuestionsAddPage();
   }

@@ -28,7 +28,7 @@
     return `<section class="workflow-filter-card" aria-label="Workflow report filters">
       <form id="workflow-filter-form" class="workflow-filter-grid">
         <label>Date range <span class="workflow-date-pair"><input type="date" name="dateStart" value="${escapeHtml(filters.dateStart)}" aria-label="Start date"><input type="date" name="dateEnd" value="${escapeHtml(filters.dateEnd)}" aria-label="End date"></span></label>
-        <label>Institution <select name="institution" disabled title="Institution is not yet stored on Question records"><option>All institutions</option></select></label>
+        <label>Institution <select name="institution">${selectOptions(options.institutions, "All institutions", filters.institution)}</select></label>
         <label>Specialty <select name="specialty">${selectOptions(options.specialties, "All specialties", filters.specialty)}</select></label>
         <label>Topic <select name="topic">${selectOptions(options.topics, "All topics", filters.topic)}</select></label>
         <label>Author <select name="author">${selectOptions(options.authors, "All authors", filters.author)}</select></label>
@@ -83,11 +83,11 @@
   }
   function getFiltersFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    return { dateStart: params.get("reportStart") || daysAgo(DEFAULT_DAYS - 1), dateEnd: params.get("reportEnd") || toInputDate(new Date()), specialty: params.get("reportSpecialty") || "", topic: params.get("reportTopic") || "", author: params.get("reportAuthor") || "", reviewer: params.get("reportReviewer") || "", status: params.get("reportStatus") || "" };
+    return { dateStart: params.get("reportStart") || daysAgo(DEFAULT_DAYS - 1), dateEnd: params.get("reportEnd") || toInputDate(new Date()), institution: params.get("reportInstitution") || "", specialty: params.get("reportSpecialty") || "", topic: params.get("reportTopic") || "", author: params.get("reportAuthor") || "", reviewer: params.get("reportReviewer") || "", status: params.get("reportStatus") || "" };
   }
   function saveFilters(filters) {
     const url = new URL(window.location.href);
-    const entries = { reportStart: filters.dateStart, reportEnd: filters.dateEnd, reportSpecialty: filters.specialty, reportTopic: filters.topic, reportAuthor: filters.author, reportReviewer: filters.reviewer, reportStatus: filters.status };
+    const entries = { reportStart: filters.dateStart, reportEnd: filters.dateEnd, reportInstitution: filters.institution, reportSpecialty: filters.specialty, reportTopic: filters.topic, reportAuthor: filters.author, reportReviewer: filters.reviewer, reportStatus: filters.status };
     Object.entries(entries).forEach(([key, value]) => value ? url.searchParams.set(key, value) : url.searchParams.delete(key));
     window.history.replaceState({}, "", url);
   }
@@ -109,7 +109,7 @@
   }
   function bindInteractions(root, data, filters) {
     root.querySelector("#workflow-filter-form")?.addEventListener("submit", (event) => { event.preventDefault(); const next = { ...filters }; new FormData(event.currentTarget).forEach((value, key) => { next[key] = String(value); }); saveFilters(next); load(root, next); });
-    root.querySelector("[data-workflow-clear]")?.addEventListener("click", () => { const next = { dateStart: daysAgo(DEFAULT_DAYS - 1), dateEnd: toInputDate(new Date()), specialty: "", topic: "", author: "", reviewer: "", status: "" }; saveFilters(next); load(root, next); });
+    root.querySelector("[data-workflow-clear]")?.addEventListener("click", () => { const next = { dateStart: daysAgo(DEFAULT_DAYS - 1), dateEnd: toInputDate(new Date()), institution: "", specialty: "", topic: "", author: "", reviewer: "", status: "" }; saveFilters(next); load(root, next); });
     root.querySelector("[data-workflow-export]")?.addEventListener("click", () => exportCsv(data));
     root.querySelectorAll("[data-workflow-stage]").forEach((button) => button.addEventListener("click", () => { const stage = button.dataset.workflowStage; if (!stage) return; const next = { ...filters, status: stage }; saveFilters(next); load(root, next); }));
     root.querySelectorAll("[data-workflow-open]").forEach((button) => button.addEventListener("click", (event) => { event.stopPropagation(); window.navigateToQuestionEditor?.(button.dataset.workflowOpen); }));
