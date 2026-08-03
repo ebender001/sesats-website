@@ -43,7 +43,13 @@ const pageState = {
   userSortDirection: "asc",
   questionsLoaded: false,
   questionsData: [],
-  questionVisibleCount: 100,
+  questionPagination: {
+    page: 1,
+    pageSize: 25,
+    totalCount: 0,
+    totalPages: 1,
+  },
+  questionRequestId: 0,
   questionEditor: null,
   activeInstitutions: [],
   activeSpecialties: [],
@@ -2856,17 +2862,30 @@ function getFilteredQuestions() {
 
 function updateQuestionListFooter(totalMatchingCount, displayedCount) {
   const count = document.getElementById("questions-count");
-  const loadMoreButton = document.getElementById("questions-load-more");
+  const previousButton = document.getElementById("questions-previous-page");
+  const nextButton = document.getElementById("questions-next-page");
+  const pageStatus = document.getElementById("questions-page-status");
+  const pageButtons = document.getElementById("questions-page-buttons");
+  const { page, pageSize, totalPages } = pageState.questionPagination;
+  const firstResult = totalMatchingCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastResult = totalMatchingCount === 0 ? 0 : firstResult + displayedCount - 1;
+
   if (count) {
     count.textContent =
       totalMatchingCount === 0
         ? "No questions to display."
-        : `Showing ${displayedCount} of ${totalMatchingCount} matching questions.`;
+        : `Showing ${firstResult}–${lastResult} of ${totalMatchingCount} questions.`;
   }
 
-  if (loadMoreButton) {
-    loadMoreButton.classList.toggle("hidden", displayedCount >= totalMatchingCount);
+  if (pageStatus) pageStatus.textContent = `Page ${page} of ${totalPages}`;
+  if (pageButtons) {
+    const visiblePages = [...new Set([1, page - 1, page, page + 1, totalPages].filter((value) => value >= 1 && value <= totalPages))];
+    pageButtons.innerHTML = visiblePages
+      .map((value, index) => `${index > 0 && value - visiblePages[index - 1] > 1 ? '<span aria-hidden="true">…</span>' : ""}<button type="button" data-question-page="${value}"${value === page ? ' aria-current="page"' : ""} aria-label="Go to page ${value}">${value}</button>`)
+      .join("");
   }
+  if (previousButton) previousButton.disabled = page <= 1 || totalMatchingCount === 0;
+  if (nextButton) nextButton.disabled = page >= totalPages || totalMatchingCount === 0;
 }
 
 function navigateToQuestionEditor(questionId) {
@@ -3269,19 +3288,15 @@ function renderQuestionRows() {
   const list = document.getElementById("questions-list");
   if (!list) return;
 
-  const { sortKey } = getQuestionFilterValues();
-  const filteredQuestions = getFilteredQuestions();
+  const questions = pageState.questionsData;
 
-  if (filteredQuestions.length === 0) {
+  if (questions.length === 0) {
     list.innerHTML = '<div class="question-list-message">No questions match the current filters.</div>';
     updateQuestionListFooter(0, 0);
     return;
   }
 
-  const sortedQuestions = sortQuestionsForDisplay(filteredQuestions, sortKey);
-  const displayedQuestions = sortedQuestions.slice(0, pageState.questionVisibleCount);
-
-  list.innerHTML = displayedQuestions
+  list.innerHTML = questions
     .map((question) => {
       const createdAt = escapeHtml(formatQuestionListDate(question.createdAt));
       const specialty = escapeHtml(question.specialty || "—");
@@ -3328,7 +3343,7 @@ function renderQuestionRows() {
     })
     .join("");
 
-  updateQuestionListFooter(filteredQuestions.length, displayedQuestions.length);
+  updateQuestionListFooter(pageState.questionPagination.totalCount, questions.length);
 }
 
 function openQuestionStemOverlay(stemText) {
@@ -3355,21 +3370,46 @@ async function fetchQuestions() {
   const list = document.getElementById("questions-list");
   if (!list) return;
 
+  const requestId = pageState.questionRequestId + 1;
+  pageState.questionRequestId = requestId;
   list.innerHTML = '<div class="question-list-message">Loading questions...</div>';
 
   try {
-    const questions = await window.back4app.runCloudFunction("listQuestions");
-    pageState.questionsData = (Array.isArray(questions) ? questions : []).map((question) =>
+    const response = await window.back4app.runCloudFunction("listQuestionsPage", {
+      page: pageState.questionPagination.page,
+      pageSize: pageState.questionPagination.pageSize,
+      filters: getQuestionFilterValues(),
+    });
+    if (requestId !== pageState.questionRequestId) return;
+    pageState.questionsData = (Array.isArray(response?.questions) ? response.questions : []).map((question) =>
       normalizeQuestionRecord(question)
     );
+    pageState.questionPagination = {
+      page: Number(response?.page) || 1,
+      pageSize: Number(response?.pageSize) || pageState.questionPagination.pageSize,
+      totalCount: Number(response?.totalCount) || 0,
+      totalPages: Number(response?.totalPages) || 1,
+    };
     pageState.questionsLoaded = true;
-    syncQuestionFilterOptions(pageState.questionsData);
     renderQuestionRows();
   } catch (error) {
+    if (requestId !== pageState.questionRequestId) return;
     console.error("Unable to load questions.", error);
     list.innerHTML =
       '<div class="question-list-message error">Unable to load questions right now.</div>';
     updateQuestionListFooter(0, 0);
+  }
+}
+
+async function fetchQuestionFilterOptions() {
+  try {
+    const options = await window.back4app.runCloudFunction("getQuestionFilterOptions");
+    populateQuestionFilterSelect("question-specialty-filter", options?.specialties || [], "All specialties");
+    populateQuestionFilterSelect("question-section-filter", options?.sections || [], "All sections");
+    populateQuestionFilterSelect("question-status-filter", options?.statuses || [], "All statuses");
+    populateQuestionFilterSelect("question-difficulty-filter", options?.difficulties || [], "All difficulties");
+  } catch (error) {
+    console.error("Unable to load question filter options.", error);
   }
 }
 
@@ -3657,37 +3697,52 @@ function bindQuestionsListPage() {
   const difficultyFilter = document.getElementById("question-difficulty-filter");
   const sortSelect = document.getElementById("question-sort");
   const list = document.getElementById("questions-list");
-  const loadMoreButton = document.getElementById("questions-load-more");
+  const previousPageButton = document.getElementById("questions-previous-page");
+  const nextPageButton = document.getElementById("questions-next-page");
+  const pageSizeSelect = document.getElementById("questions-page-size");
+  const paginationNav = document.getElementById("questions-pagination");
   const stemOverlay = document.getElementById("question-stem-overlay");
   const stemOverlayClose = document.getElementById("question-stem-close");
   const questionEditOverlay = document.getElementById("question-edit-overlay");
   const questionEditOverlayClose = document.getElementById("question-edit-overlay-close");
 
   setQuestionsFeedback("", "success");
-  pageState.questionVisibleCount = 100;
+  pageState.questionPagination = { page: 1, pageSize: Number(pageSizeSelect?.value) || 25, totalCount: 0, totalPages: 1 };
 
-  [searchInput, specialtyFilter, sectionFilter, statusFilter, difficultyFilter, sortSelect].forEach(
-    (element) => {
-      if (!element) return;
+  let searchTimer;
+  const resetToFirstPage = () => {
+    pageState.questionPagination.page = 1;
+    void fetchQuestions();
+  };
 
-      element.addEventListener("input", () => {
-        pageState.questionVisibleCount = 100;
-        renderQuestionRows();
-      });
-
-      element.addEventListener("change", () => {
-        pageState.questionVisibleCount = 100;
-        renderQuestionRows();
-      });
-    }
-  );
-
-  if (loadMoreButton) {
-    loadMoreButton.addEventListener("click", () => {
-      pageState.questionVisibleCount += 100;
-      renderQuestionRows();
-    });
-  }
+  searchInput?.addEventListener("input", () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(resetToFirstPage, 250);
+  });
+  [specialtyFilter, sectionFilter, statusFilter, difficultyFilter, sortSelect].forEach((element) => {
+    element?.addEventListener("change", resetToFirstPage);
+  });
+  pageSizeSelect?.addEventListener("change", () => {
+    pageState.questionPagination.pageSize = Number(pageSizeSelect.value) || 25;
+    resetToFirstPage();
+  });
+  previousPageButton?.addEventListener("click", () => {
+    if (pageState.questionPagination.page <= 1) return;
+    pageState.questionPagination.page -= 1;
+    void fetchQuestions();
+  });
+  nextPageButton?.addEventListener("click", () => {
+    if (pageState.questionPagination.page >= pageState.questionPagination.totalPages) return;
+    pageState.questionPagination.page += 1;
+    void fetchQuestions();
+  });
+  paginationNav?.addEventListener("click", (event) => {
+    const pageButton = event.target.closest("[data-question-page]");
+    const page = Number(pageButton?.dataset.questionPage);
+    if (!Number.isInteger(page) || page === pageState.questionPagination.page) return;
+    pageState.questionPagination.page = page;
+    void fetchQuestions();
+  });
 
   if (list) {
     list.addEventListener("click", (event) => {
@@ -3771,7 +3826,7 @@ function bindQuestionsListPage() {
     }
   });
 
-  void fetchQuestions().then(() => {
+  void Promise.all([fetchQuestionFilterOptions(), fetchQuestions()]).then(() => {
     const pendingQuestionId = getPendingQuestionEditorId();
     if (pendingQuestionId) {
       void openQuestionEditorOverlay(pendingQuestionId);

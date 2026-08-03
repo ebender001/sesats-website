@@ -77,9 +77,22 @@
     </div>
   </div>
 
-  <div class="question-list-footer">
+  <div class="question-list-footer question-pagination-footer">
     <p id="questions-count" class="question-list-count">Loading questions...</p>
-    <button type="button" id="questions-load-more" class="button button-secondary hidden">Load More</button>
+    <nav id="questions-pagination" class="question-pagination" aria-label="Questions pagination">
+      <button type="button" id="questions-previous-page" class="button button-secondary" disabled>Previous</button>
+      <label class="question-page-label" for="questions-page-size">Rows per page
+        <select id="questions-page-size" class="question-filter-control">
+          <option value="10">10</option>
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+      <span id="questions-page-buttons" class="question-page-buttons"></span>
+      <span id="questions-page-status" class="question-page-status" aria-live="polite">Page 1 of 1</span>
+      <button type="button" id="questions-next-page" class="button button-secondary" disabled>Next</button>
+    </nav>
   </div>
 </section>
 

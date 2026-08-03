@@ -1356,6 +1356,64 @@ body.nav-panel-open .nav-shell {
   font-weight: 600;
 }
 
+.question-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.question-pagination .button {
+  padding: 9px 14px;
+}
+
+.question-page-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--abts-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.question-page-label .question-filter-control {
+  min-height: 38px;
+  width: auto;
+  padding: 7px 9px;
+}
+
+.question-page-status {
+  color: var(--abts-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.question-page-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.question-page-buttons button {
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid #d7dcee;
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--abts-blue);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.question-page-buttons button:hover,
+.question-page-buttons button:focus-visible,
+.question-page-buttons button[aria-current="page"] {
+  background: #eaf2ff;
+  border-color: #9eb8e4;
+}
+
 .question-list-message {
   padding: 24px;
   color: var(--abts-muted);
@@ -3663,6 +3721,10 @@ body.nav-panel-open .nav-shell {
   .institution-form-actions .button,
   .login-actions .button {
     width: 100%;
+  }
+
+  .question-pagination .button {
+    width: auto;
   }
 
   .question-reference-grid {
