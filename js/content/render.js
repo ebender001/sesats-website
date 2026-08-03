@@ -198,6 +198,48 @@
     `;
   };
 
+  function renderQuestionPaginationFooter() {
+    const { page, pageSize, totalCount, totalPages } = api.state.questionPagination;
+    const firstResult = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+    const lastResult = totalCount === 0 ? 0 : Math.min(totalCount, firstResult + pageSize - 1);
+    const visiblePages = [...new Set([1, page - 1, page, page + 1, totalPages].filter((value) => value >= 1 && value <= totalPages))];
+    const pageButtonsHtml = visiblePages
+      .map(
+        (value, index) =>
+          `${index > 0 && value - visiblePages[index - 1] > 1 ? '<span aria-hidden="true">…</span>' : ""}<button type="button" data-question-bank-page="${value}"${value === page ? ' aria-current="page"' : ""} aria-label="Go to page ${value}">${value}</button>`
+      )
+      .join("");
+
+    return `
+      <div class="question-list-footer question-pagination-footer">
+        <p class="question-list-count">
+          ${
+            totalCount === 0
+              ? "No questions to display."
+              : `Showing ${firstResult}–${lastResult} of ${totalCount} questions.`
+          }
+        </p>
+        <nav class="question-pagination" aria-label="Question bank pagination">
+          <button type="button" class="button button-secondary" data-question-bank-prev-page ${
+            page <= 1 || totalCount === 0 ? "disabled" : ""
+          }>Previous</button>
+          <label class="question-page-label" for="question-bank-page-size">Rows per page
+            <select id="question-bank-page-size" class="question-filter-control" data-question-bank-page-size>
+              ${[10, 25, 50, 100]
+                .map((size) => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size}</option>`)
+                .join("")}
+            </select>
+          </label>
+          <span class="question-page-buttons">${pageButtonsHtml}</span>
+          <span class="question-page-status" aria-live="polite">Page ${page} of ${totalPages}</span>
+          <button type="button" class="button button-secondary" data-question-bank-next-page ${
+            page >= totalPages || totalCount === 0 ? "disabled" : ""
+          }>Next</button>
+        </nav>
+      </div>
+    `;
+  }
+
   function renderQuestionsTable(records) {
     const allVisibleSelected =
       records.length > 0 &&
@@ -267,6 +309,7 @@
           </table>
         </div>
       </div>
+      ${renderQuestionPaginationFooter()}
     `;
   }
 

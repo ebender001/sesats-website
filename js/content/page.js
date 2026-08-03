@@ -17,9 +17,14 @@
     }
 
     if (isSelected) {
+      const record = api.state.datasets.questions.find((question) => question.objectId === questionId);
       api.state.selectedQuestionIds.add(questionId);
+      if (record) {
+        api.state.selectedQuestionRecords.set(questionId, record);
+      }
     } else {
       api.state.selectedQuestionIds.delete(questionId);
+      api.state.selectedQuestionRecords.delete(questionId);
     }
 
     api.renderBulkBar();
@@ -30,8 +35,10 @@
     api.getFilteredQuestions().forEach((question) => {
       if (isSelected) {
         api.state.selectedQuestionIds.add(question.objectId);
+        api.state.selectedQuestionRecords.set(question.objectId, question);
       } else {
         api.state.selectedQuestionIds.delete(question.objectId);
+        api.state.selectedQuestionRecords.delete(question.objectId);
       }
     });
 
@@ -46,9 +53,15 @@
     }
 
     const localDate = new Date().toISOString();
-    const selectedQuestions = api.state.datasets.questions.filter((question) =>
-      ids.includes(question.objectId)
-    );
+    // Prefer the selection snapshot (covers ids selected on a different page),
+    // falling back to the currently-loaded page for row actions on unselected rows.
+    const selectedQuestions = ids
+      .map(
+        (questionId) =>
+          api.state.selectedQuestionRecords.get(questionId) ||
+          api.state.datasets.questions.find((question) => question.objectId === questionId)
+      )
+      .filter(Boolean);
 
     await Promise.all(
       ids.map(async (questionId) => {
@@ -93,6 +106,7 @@
     );
     questionIds.forEach((questionId) => {
       api.state.selectedQuestionIds.delete(questionId);
+      api.state.selectedQuestionRecords.delete(questionId);
     });
     api.renderAll();
   }
@@ -322,25 +336,44 @@
     const exportButton = document.getElementById("question-bank-export");
     const importButton = document.getElementById("question-bank-import");
 
+    // The Questions tab's search/status/specialty/difficulty filters are applied
+    // server-side by loadQuestionsPage (same listQuestionsPage cloud function the
+    // List Questions page uses), so changing them resets to page 1 and refetches.
+    // Non-question tabs still filter instantly client-side, so search re-renders
+    // the current tab immediately in addition to (debounced) refetching questions.
+    let questionSearchTimer;
+
     searchInput?.addEventListener("input", (event) => {
       api.state.filterValues.search = String(event.target.value || "");
-      api.renderCurrentTab();
+
+      window.clearTimeout(questionSearchTimer);
+      questionSearchTimer = window.setTimeout(() => {
+        api.state.questionPagination.page = 1;
+        void api.loadQuestionsPage();
+      }, 250);
+
+      if (api.state.activeTab !== "questions") {
+        api.renderCurrentTab();
+      }
       api.renderBulkBar();
     });
 
     statusFilter?.addEventListener("change", (event) => {
       api.state.filterValues.status = String(event.target.value || "");
-      api.renderAll();
+      api.state.questionPagination.page = 1;
+      void api.loadQuestionsPage();
     });
 
     specialtyFilter?.addEventListener("change", (event) => {
       api.state.filterValues.specialty = String(event.target.value || "");
-      api.renderAll();
+      api.state.questionPagination.page = 1;
+      void api.loadQuestionsPage();
     });
 
     difficultyFilter?.addEventListener("change", (event) => {
       api.state.filterValues.difficulty = String(event.target.value || "");
-      api.renderAll();
+      api.state.questionPagination.page = 1;
+      void api.loadQuestionsPage();
     });
 
     filterToggle?.addEventListener("click", () => {
@@ -355,7 +388,12 @@
         specialty: "",
         difficulty: "",
       };
-      api.renderAll();
+      api.state.questionPagination.page = 1;
+      api.renderFilterControls();
+      if (api.state.activeTab !== "questions") {
+        api.renderCurrentTab();
+      }
+      void api.loadQuestionsPage();
     });
 
     tabs.forEach((tab) => {
@@ -368,12 +406,42 @@
         api.state.activeTab = nextTab;
         if (nextTab !== "questions") {
           api.state.selectedQuestionIds.clear();
+          api.state.selectedQuestionRecords.clear();
         }
         api.renderAll();
       });
     });
 
     tableRegion?.addEventListener("click", (event) => {
+      const prevPageButton = event.target.closest("[data-question-bank-prev-page]");
+      const nextPageButton = event.target.closest("[data-question-bank-next-page]");
+      const pageNumberButton = event.target.closest("[data-question-bank-page]");
+
+      if (prevPageButton) {
+        if (api.state.questionPagination.page > 1) {
+          api.state.questionPagination.page -= 1;
+          void api.loadQuestionsPage();
+        }
+        return;
+      }
+
+      if (nextPageButton) {
+        if (api.state.questionPagination.page < api.state.questionPagination.totalPages) {
+          api.state.questionPagination.page += 1;
+          void api.loadQuestionsPage();
+        }
+        return;
+      }
+
+      if (pageNumberButton) {
+        const targetPage = Number(pageNumberButton.dataset.questionBankPage);
+        if (Number.isInteger(targetPage) && targetPage !== api.state.questionPagination.page) {
+          api.state.questionPagination.page = targetPage;
+          void api.loadQuestionsPage();
+        }
+        return;
+      }
+
       const rowActionButton = event.target.closest("[data-row-action]");
       const openEditorButton = event.target.closest("[data-open-editor]");
       const closePreviewButton = event.target.closest("[data-close-preview]");
@@ -400,8 +468,16 @@
     });
 
     tableRegion?.addEventListener("change", (event) => {
+      const pageSizeSelect = event.target.closest("[data-question-bank-page-size]");
       const questionToggle = event.target.closest("[data-select-question]");
       const selectAllToggle = event.target.closest("[data-select-all]");
+
+      if (pageSizeSelect) {
+        api.state.questionPagination.pageSize = Number(pageSizeSelect.value) || 25;
+        api.state.questionPagination.page = 1;
+        void api.loadQuestionsPage();
+        return;
+      }
 
       if (questionToggle) {
         toggleQuestionSelection(questionToggle.dataset.selectQuestion, questionToggle.checked);
@@ -445,14 +521,28 @@
       window.location.hash = "#questions-add";
     });
 
-    exportButton?.addEventListener("click", () => {
-      if (api.state.activeTab === "questions") {
-        exportQuestions(api.getFilteredQuestions(), "sesats-question-bank.csv");
-        api.setFeedback("Question bank export created from the current view.", "success");
+    exportButton?.addEventListener("click", async () => {
+      if (api.state.activeTab !== "questions") {
+        api.setFeedback("Export is currently wired for the Questions tab.", "success");
         return;
       }
 
-      api.setFeedback("Export is currently wired for the Questions tab.", "success");
+      exportButton.disabled = true;
+      try {
+        const allMatching = await api.fetchAllMatchingQuestions();
+        exportQuestions(allMatching, "sesats-question-bank.csv");
+        api.setFeedback(
+          `Question bank export created (${allMatching.length} question${
+            allMatching.length === 1 ? "" : "s"
+          } matching the current filters).`,
+          "success"
+        );
+      } catch (error) {
+        console.error("Unable to export the question bank.", error);
+        api.setFeedback("Unable to export questions right now.", "error");
+      } finally {
+        exportButton.disabled = false;
+      }
     });
 
     importButton?.addEventListener("click", () => {
@@ -470,6 +560,7 @@
   api.refreshQuestionBank = async function refreshQuestionBank() {
     api.state.loading = true;
     api.state.selectedQuestionIds.clear();
+    api.state.selectedQuestionRecords.clear();
     api.state.previewQuestionId = "";
     api.renderFeedback();
     api.renderPreviewDrawer();
@@ -485,7 +576,8 @@
       `;
     }
 
-    await api.loadQuestionBankData();
+    await api.loadQuestionBankSupportData();
+    await api.loadQuestionsPage();
     api.renderAll();
   };
 
@@ -503,7 +595,8 @@
     bindQuestionBankEvents();
 
     try {
-      await api.loadQuestionBankData();
+      await api.loadQuestionBankSupportData();
+      await api.loadQuestionsPage();
       api.renderAll();
     } catch (error) {
       console.error("Unable to initialize the Question Bank page.", error);

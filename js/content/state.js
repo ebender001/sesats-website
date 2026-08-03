@@ -19,7 +19,15 @@
       filtersExpanded: typeof window === "undefined" ? true : window.innerWidth > 680,
       loading: true,
       selectedQuestionIds: new Set(),
+      selectedQuestionRecords: new Map(),
       previewQuestionId: "",
+      questionPagination: {
+        page: 1,
+        pageSize: 25,
+        totalCount: 0,
+        totalPages: 1,
+      },
+      questionRequestId: 0,
       feedback: {
         message: "",
         type: "success",
@@ -160,9 +168,7 @@
   };
 
   api.getSelectedQuestionRecords = function getSelectedQuestionRecords() {
-    return api.state.datasets.questions.filter((question) =>
-      api.state.selectedQuestionIds.has(question.objectId)
-    );
+    return Array.from(api.state.selectedQuestionRecords.values());
   };
 
   api.setFeedback = function setFeedback(message, type) {

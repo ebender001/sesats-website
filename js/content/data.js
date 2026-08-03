@@ -1,6 +1,14 @@
 (function () {
   const api = window.QuestionBank;
 
+  // Populated once by loadQuestionBankSupportData() and read by loadQuestionsPage()
+  // whenever it normalizes a page of questions - keeps reference/media counts
+  // correct without re-fetching the full reference/media tables per page.
+  const questionLookup = {
+    referencesByQuestionId: new Map(),
+    mediaByQuestionId: new Map(),
+  };
+
   function normalizeQuestionOption(option) {
     const safeOption = option && typeof option === "object" ? option : {};
     return {
@@ -78,10 +86,10 @@
     };
   }
 
-  function normalizeMediaRecord(record, questionsById, usersById) {
+  function normalizeMediaRecord(record, questionTitlesById, usersById) {
     const safeRecord = record && typeof record === "object" ? record : {};
     const linkedQuestionId = String(safeRecord.questionObjectId || "");
-    const linkedQuestion = questionsById.get(linkedQuestionId) || null;
+    const linkedTitle = questionTitlesById.get(linkedQuestionId) || null;
     const fileName = String(safeRecord.fileName || safeRecord.fileKey || "")
       .split("/")
       .pop();
@@ -92,7 +100,7 @@
       thumbnail: String(safeRecord.thumbnail || safeRecord.publicUrl || ""),
       type: String(safeRecord.mediaType || "IMAGE"),
       filename: fileName || "Unnamed asset",
-      linkedQuestion: linkedQuestion ? linkedQuestion.title : "Not linked",
+      linkedQuestion: linkedTitle || "Not linked",
       linkedQuestionId,
       uploadedBy:
         usersById.get(String(safeRecord.uploadedByObjectId || "")) || safeRecord.uploadedBy || "Editorial Team",
@@ -102,7 +110,7 @@
       searchableText: [
         fileName,
         safeRecord.mediaType,
-        linkedQuestion?.title,
+        linkedTitle,
         safeRecord.uploadedBy,
         usageStatus,
       ]
@@ -404,18 +412,8 @@
     };
   }
 
-  async function fetchCloudList(functionName, fallbackValue) {
-    if (!window.back4app || typeof window.back4app.runCloudFunction !== "function") {
-      return fallbackValue;
-    }
-
-    try {
-      const result = await window.back4app.runCloudFunction(functionName);
-      return Array.isArray(result) ? result : fallbackValue;
-    } catch (error) {
-      console.error(`Unable to load ${functionName}.`, error);
-      return fallbackValue;
-    }
+  function hasCloudFunctions() {
+    return Boolean(window.back4app && typeof window.back4app.runCloudFunction === "function");
   }
 
   async function fetchUsersByIds(userIds, mockUsers) {
@@ -442,6 +440,35 @@
     }
 
     return usersById;
+  }
+
+  async function fetchQuestionTitlesByIds(questionIds) {
+    const titlesById = new Map();
+    const uniqueIds = Array.from(new Set((questionIds || []).filter(Boolean)));
+
+    if (!uniqueIds.length || typeof Parse === "undefined") {
+      return titlesById;
+    }
+
+    try {
+      const Question = Parse.Object.extend("Question");
+      const query = new Parse.Query(Question);
+      query.containedIn("objectId", uniqueIds);
+      query.select("stem", "specialty", "topic");
+      query.limit(uniqueIds.length);
+
+      const questions = await query.find({ useMasterKey: true });
+      questions.forEach((question) => {
+        titlesById.set(
+          question.id,
+          deriveQuestionTitle(question.get("stem"), question.get("topic"), question.get("specialty"))
+        );
+      });
+    } catch (error) {
+      console.error("Unable to load linked question titles.", error);
+    }
+
+    return titlesById;
   }
 
   async function fetchQuestionMediaRecords(mockMedia) {
@@ -541,46 +568,100 @@
     }
   }
 
-  function buildStatusOptions(statuses, questions) {
-    const liveStatuses = Array.isArray(statuses)
-      ? statuses
-          .map((status) => String(status?.name || "").trim())
-          .filter(Boolean)
-      : [];
-    const questionStatuses = questions.map((question) => question.status).filter(Boolean);
-    return Array.from(new Set([...api.QUESTION_BANK_STATUS_ORDER, ...liveStatuses, ...questionStatuses]));
+  async function fetchQuestionFilterOptions() {
+    if (!hasCloudFunctions()) {
+      return null;
+    }
+
+    try {
+      return await window.back4app.runCloudFunction("getQuestionFilterOptions");
+    } catch (error) {
+      console.error("Unable to load question filter options.", error);
+      return null;
+    }
   }
 
-  function buildSpecialtyOptions(specialties, questions) {
-    const liveSpecialties = Array.isArray(specialties)
-      ? specialties
-          .map((specialty) => String(specialty?.name || specialty?.shortName || "").trim())
-          .filter(Boolean)
-      : [];
-    const questionSpecialties = questions.map((question) => question.specialty).filter(Boolean);
-    return Array.from(new Set([...liveSpecialties, ...questionSpecialties])).sort((left, right) =>
-      left.localeCompare(right, undefined, { sensitivity: "base" })
+  async function fetchGeneratedQuestions(mockAiAssets) {
+    if (typeof Parse === "undefined") {
+      return { dataSource: "mock", records: mockAiAssets.map(normalizeAiAssetRecord) };
+    }
+
+    try {
+      const Question = Parse.Object.extend("Question");
+      const query = new Parse.Query(Question);
+      query.equalTo("generatedByAI", true);
+      query.select("stem", "specialty", "topic", "status", "difficulty", "aiModel", "aiPromptVersion", "lastEditedAt");
+      query.descending("updatedAt");
+      query.limit(1000);
+
+      const records = await query.find({ useMasterKey: true });
+      return {
+        dataSource: "live",
+        records: records.map((record) =>
+          normalizeAiAssetRecord({
+            objectId: `${record.id}-ai`,
+            questionId: `Q-${record.id.slice(-8).toUpperCase()}`,
+            assetType: "Question Draft",
+            model: record.get("aiModel") || "Unknown",
+            promptVersion: record.get("aiPromptVersion") || "—",
+            generatedAt: record.get("lastEditedAt") || record.updatedAt,
+            cached: Boolean(record.get("aiModel")),
+            needsRegeneration: record.get("status") === "Revision Requested",
+          })
+        ),
+      };
+    } catch (error) {
+      console.error("Unable to load AI-generated questions.", error);
+      return { dataSource: "mock", records: mockAiAssets.map(normalizeAiAssetRecord) };
+    }
+  }
+
+  function buildStatusFilterOptions(rawStatuses) {
+    const liveStatuses = Array.isArray(rawStatuses) ? rawStatuses.filter(Boolean) : [];
+    if (!liveStatuses.length) {
+      return [...api.QUESTION_BANK_STATUS_ORDER];
+    }
+
+    const knownFirst = api.QUESTION_BANK_STATUS_ORDER.filter((status) => liveStatuses.includes(status));
+    const extras = liveStatuses.filter((status) => !api.QUESTION_BANK_STATUS_ORDER.includes(status)).sort();
+    return [...knownFirst, ...extras];
+  }
+
+  function buildQuestionListFilters() {
+    const { search, status, specialty, difficulty } = api.state.filterValues;
+    return {
+      searchTerm: search,
+      specialty,
+      section: "",
+      editorStatus: status,
+      difficulty,
+      sortKey: "default",
+    };
+  }
+
+  function normalizeQuestionPage(rawQuestions, usersById) {
+    return rawQuestions.map((question) =>
+      normalizeQuestionRecord(question, {
+        referencesByQuestionId: questionLookup.referencesByQuestionId,
+        mediaByQuestionId: questionLookup.mediaByQuestionId,
+        usersById,
+      })
     );
   }
 
-  api.loadQuestionBankData = async function loadQuestionBankData() {
+  // Loads everything the Question Bank needs EXCEPT the paginated question
+  // rows: media, references, filter option lists, and the AI Assets tab
+  // (sourced from a dedicated generatedByAI query rather than the full question
+  // set, since that set is no longer loaded wholesale). Call once per page
+  // bind/refresh; loadQuestionsPage() handles the Questions tab separately.
+  api.loadQuestionBankSupportData = async function loadQuestionBankSupportData() {
     const mockData = buildMockQuestionBankData();
-    const [liveQuestions, statuses, specialties] = await Promise.all([
-      fetchCloudList("listQuestions", mockData.questions),
-      fetchCloudList("listStatuses", []),
-      fetchCloudList("listSpecialties", []),
-    ]);
 
-    const [usersById, mediaPayload, referencePayload] = await Promise.all([
-      fetchUsersByIds(
-        liveQuestions.flatMap((question) => [
-          question?.createdByObjectId || "",
-          question?.lastEditedByObjectId || "",
-        ]),
-        mockData.usersById
-      ),
+    const [filterOptions, mediaPayload, referencePayload, aiAssetsPayload] = await Promise.all([
+      fetchQuestionFilterOptions(),
       fetchQuestionMediaRecords(mockData.media),
       fetchReferenceRecords(mockData.references, mockData.questionReferenceLinks),
+      fetchGeneratedQuestions(mockData.aiAssets),
     ]);
 
     const referencesByQuestionId = new Map();
@@ -630,93 +711,179 @@
       mediaByQuestionId.get(questionObjectId).push(mediaRecord);
     });
 
-    const questions = liveQuestions.map((question) =>
-      normalizeQuestionRecord(question, { referencesByQuestionId, mediaByQuestionId, usersById })
-    );
-    const questionsById = new Map(questions.map((question) => [question.objectId, question]));
-    const media = mediaPayload.records.map((record) => normalizeMediaRecord(record, questionsById, usersById));
-    const references = referencePayload.references.map((record) =>
+    questionLookup.referencesByQuestionId = referencesByQuestionId;
+    questionLookup.mediaByQuestionId = mediaByQuestionId;
+
+    // fetchQuestionTitlesByIds queries the real Question class, so it can only
+    // resolve live media's linked-question titles - mock media links to
+    // synthetic ids (e.g. "qbmock001") that were never written to Parse, so
+    // those titles come from the in-memory mock question list instead.
+    const questionTitlesById =
+      mediaPayload.dataSource === "live"
+        ? await fetchQuestionTitlesByIds(mediaPayload.records.map((record) => record.questionObjectId))
+        : new Map(
+            mockData.questions.map((question) => [
+              question.objectId,
+              deriveQuestionTitle(question.stem, question.topic, question.specialty),
+            ])
+          );
+
+    api.state.datasets.references = referencePayload.references.map((record) =>
       normalizeReferenceRecord(record, questionCountByReferenceId)
     );
-
-    const liveAiAssets = questions
-      .filter((question) => question.generatedByAI || question.aiModel || question.aiPromptVersion)
-      .map((question) =>
-        normalizeAiAssetRecord({
-          objectId: `${question.objectId}-ai`,
-          questionId: `Q-${question.idLabel}`,
-          assetType: question.generatedByAI ? "Question Draft" : "Prompt Artifact",
-          model: question.aiModel || "Unknown",
-          promptVersion: question.aiPromptVersion || "—",
-          generatedAt: question.lastEditedAt,
-          cached: Boolean(question.aiModel),
-          needsRegeneration: question.status === "Revision Requested",
-        })
-      );
-
-    const finalQuestions = questions.length
-      ? questions
-      : mockData.questions.map((question) =>
-          normalizeQuestionRecord(question, {
-            referencesByQuestionId,
-            mediaByQuestionId,
-            usersById: mockData.usersById,
-          })
-        );
-    const finalQuestionsById = new Map(finalQuestions.map((question) => [question.objectId, question]));
-    const finalMedia = media.length
-      ? media
-      : mockData.media.map((record) =>
-          normalizeMediaRecord(record, finalQuestionsById, mockData.usersById)
-        );
-    const finalReferences = references.length
-      ? references
-      : mockData.references.map((record) => normalizeReferenceRecord(record, questionCountByReferenceId));
-    const finalAiAssets = liveAiAssets.length
-      ? liveAiAssets
-      : mockData.aiAssets.map(normalizeAiAssetRecord);
-
-    api.state.datasets.questions = finalQuestions;
-    api.state.datasets.media = finalMedia;
-    api.state.datasets.references = finalReferences;
-    api.state.datasets.aiAssets = finalAiAssets;
+    api.state.datasets.media = mediaPayload.records.map((record) =>
+      normalizeMediaRecord(record, questionTitlesById, new Map())
+    );
+    api.state.datasets.aiAssets = aiAssetsPayload.records;
     api.state.datasets.templates = mockData.templates.map(normalizeTemplateRecord);
 
-    api.state.filterOptions.statuses = buildStatusOptions(statuses, api.state.datasets.questions);
-    api.state.filterOptions.specialties = buildSpecialtyOptions(specialties, api.state.datasets.questions);
-    api.state.meta.dataSources.questions =
-      questions.length && liveQuestions !== mockData.questions ? "live" : "mock";
-    api.state.meta.dataSources.media =
-      media.length && mediaPayload.dataSource === "live" ? "live" : "mock";
-    api.state.meta.dataSources.references =
-      references.length && referencePayload.dataSource === "live" ? "live" : "mock";
-    api.state.meta.dataSources.aiAssets = liveAiAssets.length ? "live" : "mock";
+    api.state.filterOptions.statuses = buildStatusFilterOptions(filterOptions?.statuses);
+    api.state.filterOptions.specialties =
+      Array.isArray(filterOptions?.specialties) && filterOptions.specialties.length
+        ? filterOptions.specialties
+        : Array.from(new Set(mockData.questions.map((question) => question.specialty).filter(Boolean))).sort();
+
+    api.state.meta.dataSources.references = referencePayload.dataSource;
+    api.state.meta.dataSources.media = mediaPayload.dataSource;
+    api.state.meta.dataSources.aiAssets = aiAssetsPayload.dataSource;
     api.state.meta.dataSources.templates = "mock";
-    api.state.loading = false;
+  };
+
+  // Loads one page of the Questions tab via the same server-paginated
+  // listQuestionsPage cloud function the List Questions page uses, instead of
+  // pulling the whole (up to 1000-row) table and filtering client-side.
+  api.loadQuestionsPage = async function loadQuestionsPage() {
+    const requestId = api.state.questionRequestId + 1;
+    api.state.questionRequestId = requestId;
+
+    const region = document.getElementById("question-bank-table-region");
+    if (api.state.activeTab === "questions" && region) {
+      region.innerHTML = `
+        <div class="question-bank-loading-card">
+          <div class="question-bank-loading-title">Loading questions...</div>
+          <p>Applying the current search and filters.</p>
+        </div>
+      `;
+    }
+
+    const mockData = buildMockQuestionBankData();
+    const filters = buildQuestionListFilters();
+
+    if (!hasCloudFunctions()) {
+      if (requestId !== api.state.questionRequestId) {
+        return;
+      }
+
+      api.state.datasets.questions = normalizeQuestionPage(mockData.questions, new Map(mockData.usersById));
+      api.state.questionPagination = {
+        page: 1,
+        pageSize: api.state.questionPagination.pageSize,
+        totalCount: mockData.questions.length,
+        totalPages: 1,
+      };
+      api.state.meta.dataSources.questions = "mock";
+      api.state.loading = false;
+      api.renderCurrentTab();
+      api.renderBulkBar();
+      return;
+    }
+
+    try {
+      const response = await window.back4app.runCloudFunction("listQuestionsPage", {
+        page: api.state.questionPagination.page,
+        pageSize: api.state.questionPagination.pageSize,
+        filters,
+      });
+
+      if (requestId !== api.state.questionRequestId) {
+        return;
+      }
+
+      const rawQuestions = Array.isArray(response?.questions) ? response.questions : [];
+      const usersById = await fetchUsersByIds(
+        rawQuestions.flatMap((question) => [
+          question?.createdByObjectId || "",
+          question?.lastEditedByObjectId || "",
+        ]),
+        mockData.usersById
+      );
+
+      if (requestId !== api.state.questionRequestId) {
+        return;
+      }
+
+      api.state.datasets.questions = normalizeQuestionPage(rawQuestions, usersById);
+      api.state.questionPagination = {
+        page: Number(response?.page) || 1,
+        pageSize: Number(response?.pageSize) || api.state.questionPagination.pageSize,
+        totalCount: Number(response?.totalCount) || 0,
+        totalPages: Number(response?.totalPages) || 1,
+      };
+      api.state.meta.dataSources.questions = "live";
+      api.state.loading = false;
+      api.renderCurrentTab();
+      api.renderBulkBar();
+    } catch (error) {
+      if (requestId !== api.state.questionRequestId) {
+        return;
+      }
+
+      console.error("Unable to load the question bank page.", error);
+      api.state.datasets.questions = [];
+      api.state.loading = false;
+
+      if (api.state.activeTab === "questions" && region) {
+        region.innerHTML = api.renderEmptyState("We couldn't load questions right now. Please try again.");
+      }
+
+      api.setFeedback("Unable to load questions.", "error");
+    }
+  };
+
+  // Walks every page of listQuestionsPage for the current filters so "Export"
+  // can produce a CSV of all matching questions, not just the visible page.
+  api.fetchAllMatchingQuestions = async function fetchAllMatchingQuestions() {
+    if (!hasCloudFunctions()) {
+      return api.state.datasets.questions.slice();
+    }
+
+    const filters = buildQuestionListFilters();
+    const pageSize = 100;
+
+    const firstResponse = await window.back4app.runCloudFunction("listQuestionsPage", {
+      page: 1,
+      pageSize,
+      filters,
+    });
+
+    const totalPages = Math.max(1, Number(firstResponse?.totalPages) || 1);
+    const remainingPages = Array.from({ length: totalPages - 1 }, (_, index) => index + 2);
+
+    const remainingResponses = await Promise.all(
+      remainingPages.map((page) =>
+        window.back4app.runCloudFunction("listQuestionsPage", { page, pageSize, filters })
+      )
+    );
+
+    const rawQuestions = [firstResponse, ...remainingResponses].flatMap((response) =>
+      Array.isArray(response?.questions) ? response.questions : []
+    );
+
+    const usersById = await fetchUsersByIds(
+      rawQuestions.flatMap((question) => [
+        question?.createdByObjectId || "",
+        question?.lastEditedByObjectId || "",
+      ]),
+      []
+    );
+
+    return normalizeQuestionPage(rawQuestions, usersById);
   };
 
   api.getFilteredQuestions = function getFilteredQuestions() {
-    const { search, status, specialty, difficulty } = api.state.filterValues;
-
-    return api.state.datasets.questions.filter((question) => {
-      if (search && !question.searchableText.includes(search.toLowerCase())) {
-        return false;
-      }
-
-      if (status && question.status !== status) {
-        return false;
-      }
-
-      if (specialty && question.specialty !== specialty) {
-        return false;
-      }
-
-      if (difficulty && question.difficulty !== difficulty) {
-        return false;
-      }
-
-      return true;
-    });
+    // listQuestionsPage already applied search/status/specialty/difficulty
+    // server-side, so the loaded page needs no further client-side filtering.
+    return api.state.datasets.questions;
   };
 
   api.getFilteredTabRecords = function getFilteredTabRecords() {
